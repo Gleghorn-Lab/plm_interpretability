@@ -1,0 +1,3 @@
+[submodule "protify"]
+	path = protify
+	url = https://github.com/Synthyra/Protify.git
