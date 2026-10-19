@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import time
 import numpy as np
 import pandas as pd
 
@@ -46,10 +47,130 @@ RAW = ("run", "run_s24896", "run_s24897")
 RANDOM_RAW = ("run_random", "run_random_s24896", "run_random_s24897")
 BLOCKS = {"ESMC-300": 30, "ESMC-600": 36, "ESMC-6B": 80}
 
+# The three-seed pooling and MLP study: its own archive, in Protify's run layout and not compacted, so its tables are
+# read before `install` points Protify's readers at the compacted ones.
+POOLING_REPO = "GleghornLab/esmc_tap_probing_pooling_results"
+POOLING_REVISION = "d5ee37bf"
+POOLING_PATTERNS = ["runs/tables/*/*/*.parquet", "runs/*/results/*/*/scores.parquet", "runs/*/results/*/*/validation.parquet",
+                    "runs/*/results/*/*/ranking.parquet", "runs/*/results/*/*/run.json",
+                    # ESMC-600's geometry (`geometry/<store>/`) and causal analyses (`causal/esmc600_s<seed>/`)
+                    "geometry/*/*.parquet", "causal/*/*.parquet", "causal/*/*.json", "causal/*/*/*.parquet", "causal/*/*/*.json"]
+POOLING_ROOTS = {"ESMC-300": ("esmc300_norm_s24895", "esmc300_norm_s24896", "esmc300_norm_s24897"),
+                 "ESMC-6B": ("esmc6b_norm_s24895", "esmc6b_norm_s24896", "esmc6b_norm_s24897")}
+# The survey's mean-only probes that its own archive lacks (ESMC-300 at seeds 24896 and 24897, the randomly initialized
+# model, and every model and baseline on the earlier pair task `ppi`), compacted in the layout of `REPO` under
+# `survey/` of the pooling study's archive, so `overlay` adds them to the restored roots.
+SURVEY_PATTERNS = [f"survey/{pattern}" for pattern in PATTERNS if pattern.startswith("runs/*/*/*/")]
+# The Supplement repeats the main text's survey with protein probes and `ppi`'s pair probes on the pooled mean, and
+# residue probes, which pool nothing, on token states; `compose` gathers them into this results label, so Protify's
+# drawing code reads one run.
+MEAN_POOLED = "mean_pooled"
+MEAN_ONLY = ("ppi",)  # the pair tasks read on the pooled mean; `ppi2` ran under mean and variance only
+
+
+def snapshot(repo: str, revision: str, out: Path, patterns: Sequence[str], attempts: int = 12, pause: float = 120.0) -> Path:
+    """`snapshot_download` of a dataset's files matching `patterns` at `revision`, under `out`. The pooling archive holds
+    thousands of small tables, enough to meet the Hub's rate limit (HTTP 429); the download then pauses and resumes,
+    skipping the files it already has."""
+    for attempt in range(attempts):
+        try:
+            return Path(snapshot_download(repo, repo_type="dataset", revision=revision, local_dir=out, allow_patterns=list(patterns), max_workers=2))
+        except Exception as error:
+            if "429" not in str(error) or attempt == attempts - 1:
+                raise
+            print(f"The Hub's rate limit; resuming the download in {pause:.0f} s ({attempt + 1} of {attempts - 1}).", flush=True)
+            time.sleep(pause)
+    raise AssertionError("unreachable")
+
 
 def download(out: Path) -> Path:
     """The archive's tables at the pinned revision, under `out`."""
-    return Path(snapshot_download(REPO, repo_type="dataset", revision=REVISION, local_dir=out, allow_patterns=PATTERNS))
+    return snapshot(REPO, REVISION, out, PATTERNS)
+
+
+def download_pooling(out: Path) -> Path:
+    """The pooling and MLP study's tables and the survey's mean-only additions at its pinned revision, under `out`."""
+    return snapshot(POOLING_REPO, POOLING_REVISION, out, POOLING_PATTERNS + SURVEY_PATTERNS)
+
+
+def compact_scores(scores: pd.DataFrame, keys: Sequence[str] = KEYS) -> pd.DataFrame:
+    """Protify's per-resample scores as the archive keeps them: one row per probe and condition with the full-test score
+    (resample 0) and the mean, standard deviation and count of the scores on the test halves."""
+    full = scores[scores["resample"] == 0].set_index(list(keys))["score"].rename("full")
+    halves = scores[scores["resample"] > 0].groupby(list(keys))["score"].agg(halves_mean="mean", halves_std="std", halves="count")
+    table = pd.concat([full, halves], axis=1).reset_index()
+    return table.astype({"full": "float32", "halves_mean": "float32", "halves_std": "float32", "halves": "int8"})
+
+
+def stage_survey(runs: Path, out: Path) -> dict[str, list[dict[str, object]]]:
+    """The survey's reruns, as Protify wrote them (`runs/<root>/results/<label>/<task>/`), in the archive's layout under
+    `out/runs/<root>/<label>/<task>/`, which `overlay` reads: the run record, the compacted scores, the probe records
+    (training records with each probe's validation score and loss), ProtParam's per-target scores of full-width probes,
+    compacted the same way, and, for pair tasks, the ranking metrics and bootstrap intervals. A task folder without a run
+    record is unfinished and skipped. Writes `out/catalog.json`, the files kept and the files of each task folder left
+    out, and returns it."""
+    kept, left = [], []
+    staged = ("run.json", "scores.parquet", "training.parquet", "validation.parquet", "ranking.parquet", "intervals.parquet")
+    for folder in sorted(runs.glob("*/results/*/*")):
+        if not (folder / "run.json").exists():
+            continue
+        root, label, task = folder.parent.parent.parent.name, folder.parent.name, folder.name
+        target = out / "runs" / root / label / task
+        target.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(folder / "run.json", target / "run.json")
+        compact_scores(pd.read_parquet(folder / "scores.parquet")).to_parquet(target / "scores.parquet", index=False)
+        taken = set(staged)
+        if task == "prot_param" and (folder / "elementwise.parquet").exists():
+            elementwise = pd.read_parquet(folder / "elementwise.parquet")
+            elementwise = elementwise[elementwise["family"] == "full"]
+            compact_scores(elementwise, ["task", "family", "probe_name", "label_index"]).to_parquet(target / "elementwise.parquet", index=False)
+            taken.add("elementwise.parquet")
+        probes = pd.read_parquet(folder / "training.parquet")
+        if (folder / "validation.parquet").exists():
+            probes = probes.merge(pd.read_parquet(folder / "validation.parquet"), on=["task", "family", "probe_name"], how="left", validate="one_to_one")
+        probes.to_parquet(target / "probes.parquet", index=False)
+        for name in ("ranking.parquet", "intervals.parquet"):
+            if (folder / name).exists():
+                shutil.copyfile(folder / name, target / name)
+        kept += [{"path": path.relative_to(out).as_posix(), "bytes": path.stat().st_size} for path in sorted(target.iterdir())]
+        left += [{"path": path.relative_to(runs).as_posix(), "bytes": path.stat().st_size} for path in sorted(folder.iterdir())
+                 if path.is_file() and path.name not in taken]
+    catalog = {"kept": kept, "omitted": left}
+    (out / "catalog.json").write_text(json.dumps(catalog, indent=1), encoding="utf-8", newline="\n")
+    return catalog
+
+
+def overlay(survey: Path, runs: Path) -> Path:
+    """Add the survey's mean-only additions (`<pooling archive>/survey`) to the roots `restore` wrote under `runs`;
+    raises rather than replace a file the survey's own archive holds."""
+    for source in sorted(path for path in (survey / "runs").rglob("*") if path.is_file()):
+        root, label, *rest = source.relative_to(survey / "runs").parts
+        target = runs / root / "results" / label / Path(*rest)
+        if target.exists():
+            raise FileExistsError(f"{target} is in the survey's archive and in its mean-only additions.")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+    return runs
+
+
+def compose(root: Path, label: str = MEAN_POOLED) -> Path:
+    """Gather in `root` the probes the Supplement's mean-only survey reads under one results label: each protein task's and `ppi`'s
+    mean-only probes (`linear_mean`) and each residue task's probes (`linear`); `ppi2`, which ran under mean and variance
+    pooling only, is left out. Raises when a protein task or `ppi` has no mean-only probes."""
+    results = root / "results"
+    tasks = {path.parent.name: path for label_folder in ("linear", "linear_mean") for path in (results / label_folder).glob("*/run.json")}
+    for name, record in sorted(tasks.items()):
+        level = json.loads(record.read_text(encoding="utf-8"))["task"]["level"]
+        if level == "residue":
+            source = results / "linear" / name
+        elif level == "protein" or name in MEAN_ONLY:
+            source = results / "linear_mean" / name
+        else:
+            continue
+        if not (source / "run.json").exists():
+            raise FileNotFoundError(f"{root.name} has no {source.parent.name} probes of {name}.")
+        shutil.copytree(source, results / label / name, dirs_exist_ok=True)
+    return root
 
 
 def restore(archive: Path, out: Path) -> Path:

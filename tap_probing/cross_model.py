@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from src.protify.interpretability import figures
 from src.protify.interpretability.figures import GRID, INK, INK_SECONDARY, MUTED, PALETTE, RESIDUAL, SITE_LABELS
-from src.protify.interpretability.trends import CONCEPT_ORDER
+from src.protify.interpretability.trends import CATEGORIES, CATEGORY_OF, CONCEPT_ORDER
 
 
 MODEL_COLORS = {"ESMC-300": PALETTE[0], "ESMC-600": PALETTE[1], "ESMC-6B": PALETTE[2]}
@@ -97,6 +97,48 @@ def site_gaps_all(summaries: dict[str, pd.DataFrame], path: Path, tasks: Sequenc
     bar = figure.colorbar(image, cax=figure.add_axes((0.35, 0.012, 0.3, 0.012)), orientation="horizontal", extend="both")
     bar.set_ticks([-0.1, -0.05, 0.0, 0.05, 0.1])
     bar.set_label("best state at the site minus best residual-stream state", fontsize=5.5)
+    bar.ax.tick_params(labelsize=5)
+    return figures._save(figure, path)
+
+
+def kind_gaps(summary: pd.DataFrame, tasks: Sequence[str] = CONCEPT_ORDER) -> pd.DataFrame:
+    """Sites by kinds of concept: the median over a kind's tasks of each site's best probe over blocks minus the task's
+    best residual-stream probe, both chosen on validation (`figures.site_gaps`)."""
+    gaps = figures.site_gaps(summary, tasks)
+    kinds = [kind for kind, members in CATEGORIES if any(task in gaps.index for task in members)]
+    return gaps.groupby(gaps.index.map(CATEGORY_OF)).median().reindex(kinds).T
+
+
+def state_concepts(summaries: dict[str, pd.DataFrame], path: Path, limit: float = 0.1) -> Path:
+    """One map per model of which kinds of state read which kinds of concept: `kind_gaps`, every cell printed, gray
+    where no task of the kind was probed at the site."""
+    plt = figures._pyplot()
+    gaps = {model: kind_gaps(summary) for model, summary in summaries.items()}
+    sites = [site for site in SITE_LABELS if any(site in gap.index for gap in gaps.values())]
+    kinds = [kind for kind, _ in CATEGORIES if any(kind in gap.columns for gap in gaps.values())]
+    figure, axes = plt.subplots(1, len(gaps), figsize=(7.2, 0.16 * len(sites) + 1.6), sharey=True)
+    colormap = figures._colormap(figures.DIVERGING, "kind_gaps")
+    colormap.set_bad("#e4e3df")
+    image = None
+    for letter, (axis, (model, gap)) in zip("ABC", zip(axes, gaps.items(), strict=True), strict=False):
+        matrix = gap.reindex(index=sites, columns=kinds).to_numpy(dtype=float)
+        image = axis.imshow(np.ma.masked_invalid(matrix), cmap=colormap, vmin=-limit, vmax=limit, aspect="auto")
+        for row, column in zip(*np.nonzero(np.isfinite(matrix)), strict=True):
+            value = matrix[row, column]
+            axis.text(column, row, f"{value:+.2f}".replace("0.", "."), ha="center", va="center", fontsize=4.0,
+                      color="white" if abs(value) > 0.7 * limit else INK)
+        axis.set_xticks(range(len(kinds)))
+        axis.set_xticklabels(kinds, rotation=60, ha="right")
+        axis.set_yticks(range(len(sites)))
+        axis.set_yticklabels([SITE_LABELS[site] for site in sites])
+        axis.tick_params(length=0)
+        figures._tag(axis, model)
+        figures._letter(axis, letter, x=-0.02 if letter != "A" else -0.38)
+        figures._bare(axis)
+    figure.tight_layout(w_pad=0.4, rect=(0, 0.05, 1, 1))
+    bar = figure.colorbar(image, cax=figure.add_axes((0.35, 0.012, 0.3, 0.012)), orientation="horizontal", extend="both")
+    bar.set_ticks([-limit, -limit / 2, 0.0, limit / 2, limit])
+    bar.set_label("best state at the site minus best residual-stream state (median over the kind's tasks)", fontsize=5.5)
     bar.ax.tick_params(labelsize=5)
     return figures._save(figure, path)
 

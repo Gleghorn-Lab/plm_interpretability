@@ -199,7 +199,7 @@ use. When a rank or shape cannot be proven, write a documented symbol or an elli
 
 The last five recur across this workspace's protein work and are defined once here so every
 project uses the same letters. Before wave 0 each repository chose its own, which is a large
-part of why two Atlas implementations were hard to compare. Dual-tower all-versus-all scoring
+part of why two implementations of the PPI model were hard to compare. Dual-tower all-versus-all scoring
 therefore reads:
 
 ```python
