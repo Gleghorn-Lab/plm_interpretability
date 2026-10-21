@@ -40,22 +40,24 @@ No GPU is needed: the archive holds every probe's scores, and the figures are dr
 git clone --recurse-submodules https://github.com/Gleghorn-Lab/tap_probing
 cd tap_probing
 pip install -r protify/requirements.txt -r requirements.txt
-PYTHONPATH=protify:. python -m tap_probing.reproduce --out reproduced
+PYTHONPATH=protify:. python -P -m tap_probing.reproduce --out reproduced
 ```
 
-The script downloads both archives at their pinned revisions (about 300 MB and 7,000 small tables; at the Hub's rate
+`-P` (Python 3.11 or later) keeps the clone's own folder off the front of the import path, where its `foundry` package
+would hide Protify's. The script downloads both archives at their pinned revisions (about 300 MB and 7,000 small tables; at the Hub's rate
 limit it pauses and resumes), checks that each model's rebuilt probe summary matches the one written when the paper's
 figures were drawn, and writes:
 
 | Folder | Paper items |
 |---|---|
-| `reproduced/trends` | Figures 2, 7, 8 and 9 (emergence, controls, model size, the 2024 interaction gold standard) and S26 (the 2026 one) |
+| `reproduced/trends` | Figures 2, 7, 9 and 10 (emergence, controls, model size, the 2024 interaction gold standard) and S27 (the 2026 one) |
+| `reproduced/familiarity` | Figures 8 and S26: probe correctness against each model's pseudo log likelihood of the protein |
 | `reproduced/cross_model` | Figures 3 (state rankings), S1 to S3, Tables S1 to S4 |
 | `reproduced/probe_gap` | Figures 4 (what a nonlinear readout adds), S21 to S23 |
 | `reproduced/causal` | Figures 5 and 6 (lenses, write ablations, erasure), S24 and S25 |
 | `reproduced/trends_mean`, `reproduced/cross_model_mean` | Figures S4 and S5: the survey on the pooled mean |
-| `reproduced/main` | ESMC-300 figures of the Supplement: controls, state maps, heads, rotation, random-init comparison, ProtParam targets and the settings sweep (Figures S6 to S14), phosphomimetic scanning (S28) |
-| `reproduced/raw` | the same on raw token states, and the principal-component views (Figure S27) |
+| `reproduced/main` | ESMC-300 figures of the Supplement: controls, state maps, heads, rotation, random-init comparison, ProtParam targets and the settings sweep (Figures S6 to S14), phosphomimetic scanning (S29) |
+| `reproduced/raw` | the same on raw token states, and the principal-component views (Figure S28) |
 | `reproduced/compare` | raw against unit-norm states (Figure S15) |
 | `reproduced/pooling` | Figures S16 to S20 and Tables S5 and S6: pooling and MLP probes, three seeds of every model |
 | `reproduced/esmc600`, `reproduced/esmc6b` | per-model tables of the larger models |
@@ -70,8 +72,8 @@ Every table the paper's numbers come from is written beside its figure as CSV.
 `docs/runs.md` lists the Protify commands for every run: pooled stores, settings sweeps and selections, protein and
 residue probes, controls, the randomly initialized model, the baseline encodings, the larger models, the pair tasks and
 their bootstrap intervals, principal components, phosphomimetic scans, the pooling and MLP study, ESMC-600's probe
-variants and geometry, and its lenses, ablations and erasure. They ran in Docker on NVIDIA GH200s;
-probe weights and pooled stores are not archived, since every probe retrains from the pinned models and datasets.
+variants and geometry, its lenses, ablations and erasure, and the familiarity analysis. They ran in Docker on NVIDIA
+GH200s, the familiarity analysis on NVIDIA H100s on Modal; probe weights and pooled stores are not archived, since every probe retrains from the pinned models and datasets.
 
 ## Citation
 
