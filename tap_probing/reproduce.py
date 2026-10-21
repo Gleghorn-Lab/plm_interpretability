@@ -7,8 +7,8 @@ model's rebuilt probe summary against the one written when the figures were firs
 drawing code as the study did (`figures` per model, `trends` across models, `compare` across input treatments) and
 draws the cross-model figures and tables. The three-seed pooling and MLP study has an archive of its own, which also
 holds the survey's mean-only additions, ESMC-600's probe variants and geometry, and its causal analyses: from it
-`tap_probing.pooling_study`, `probe_gap` and `causal_figures` draw theirs. Outputs:
-`<out>/{pooling,probe_gap,causal,trends,trends_mean,main,raw,esmc600,esmc6b,compare,cross_model,cross_model_mean}`.
+`tap_probing.pooling_study`, `probe_gap`, `causal_figures` and `familiarity` draw theirs. Outputs:
+`<out>/{pooling,probe_gap,causal,familiarity,trends,trends_mean,main,raw,esmc600,esmc6b,compare,cross_model,cross_model_mean}`.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from pathlib import Path
 from src.protify.interpretability import figures, trends
 from src.protify.interpretability.selection import rank_settings
 
-from tap_probing import archive, causal_figures, cross_model, pooling_study, probe_gap, solver_table
+from tap_probing import archive, causal_figures, cross_model, familiarity, pooling_study, probe_gap, solver_table
 
 
 PROTEIN_SWEEPS = ("p_b256", "p_b1024")
@@ -111,6 +111,7 @@ def main() -> None:
     written = pooling(pooled, args.out / "pooling")
     written += probe_gap.write_all(pooled / "runs" / "tables", pooled / "runs", pooled / "geometry", args.out / "probe_gap", sizes)
     written += causal_figures.write_all(pooled / "causal", args.out / "causal")
+    written += familiarity.write_all(pooled / "familiarity", args.out / "familiarity")
     source = args.archive or archive.download(args.out / "archive")
     runs = archive.overlay(pooled / "survey", archive.restore(source, args.out / "runs"))
     # The Supplement's mean-only label on every root of the survey it repeats; raw states have no mean-only probes at

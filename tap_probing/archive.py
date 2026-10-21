@@ -50,11 +50,13 @@ BLOCKS = {"ESMC-300": 30, "ESMC-600": 36, "ESMC-6B": 80}
 # The three-seed pooling and MLP study: its own archive, in Protify's run layout and not compacted, so its tables are
 # read before `install` points Protify's readers at the compacted ones.
 POOLING_REPO = "GleghornLab/esmc_tap_probing_pooling_results"
-POOLING_REVISION = "d5ee37bf"
+POOLING_REVISION = "73883ced"
 POOLING_PATTERNS = ["runs/tables/*/*/*.parquet", "runs/*/results/*/*/scores.parquet", "runs/*/results/*/*/validation.parquet",
                     "runs/*/results/*/*/ranking.parquet", "runs/*/results/*/*/run.json",
                     # ESMC-600's geometry (`geometry/<store>/`) and causal analyses (`causal/esmc600_s<seed>/`)
-                    "geometry/*/*.parquet", "causal/*/*.parquet", "causal/*/*.json", "causal/*/*/*.parquet", "causal/*/*/*.json"]
+                    "geometry/*/*.parquet", "causal/*/*.parquet", "causal/*/*.json", "causal/*/*/*.parquet", "causal/*/*/*.json",
+                    # per-protein probe outputs and PPLL of every encoder (`familiarity/<encoder>/`), the familiarity analysis
+                    "familiarity/*/*.parquet", "familiarity/*/manifest.json"]
 POOLING_ROOTS = {"ESMC-300": ("esmc300_norm_s24895", "esmc300_norm_s24896", "esmc300_norm_s24897"),
                  "ESMC-6B": ("esmc6b_norm_s24895", "esmc6b_norm_s24896", "esmc6b_norm_s24897")}
 # The survey's mean-only probes that its own archive lacks (ESMC-300 at seeds 24896 and 24897, the randomly initialized

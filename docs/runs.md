@@ -158,3 +158,25 @@ P lens --model ESMC-600 --seed <seed> --out causal      # logit and tuned lenses
 P ablate --model ESMC-600 --seed <seed> --out causal    # mean and zero ablation of every attention and feed-forward write
 P erase --model ESMC-600 --seed <seed> --out causal     # LEACE of four concepts at eight depths, with random-direction controls
 ```
+
+## Familiarity (Protify `895a96c`, Modal)
+
+The pooling study's linear probes rerun on the residual stream for five encoders, `ESMC-300`, `ESMC-600`, `ESMC-6B`,
+the randomly initialized ESMC-300 (`--random-init`, its own stores per seed) and `OneHot-Protein` (raw rows, sites
+`embedding` only), at seeds 24895, 24896 and 24897, each encoder in one NVIDIA H100 container on Modal. The trained
+models' seed replicates read the seed-24895 stores, and ESMC-6B writes them at `--max-tokens 65536`.
+
+```bash
+P embed --root <encoder>_s<seed> --tasks protein --max-tokens 131072 --model <model> --seed <seed> --sites embedding,resid_post,final_norm --normalize
+P train --root <encoder>_s<seed> --tasks <the 12 classification tasks> --label linear --no-heads --max-epochs 100 --patience 10 \
+  --no-controls --bank-budget-gb 30 --batch-size 256 --lr 0.03 --wd 0 --model <model> --seed <seed> --sites embedding,resid_post,final_norm --normalize
+P train ... --tasks prot_param --batch-size 1024 --lr 1e-3 --wd 0.1                  # then ProtParam, the same flags otherwise
+```
+
+Per encoder and task, the stream state with the highest validation score averaged over the seeds is chosen, and each
+seed's probe there scores every test protein. Each trained model's masked-language-model head then scores every test
+sequence of the 22 tasks in one unmasked bfloat16 forward pass; a protein's PPLL is the mean over its residues of the
+log probability of the observed residue. The archive keeps, under `familiarity/<encoder>/`, the per-protein outputs
+(`predictions.parquet`), each seed's task score recomputed from them beside Protify's (`checks.parquet`), the PPLLs
+with every residue's log probability (`ppll.parquet`), the manifest and Protify's tables for each probe;
+`tap_probing.familiarity` draws Figures 8 and S26 from them.
