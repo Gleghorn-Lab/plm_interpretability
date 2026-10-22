@@ -21,7 +21,7 @@ erasure.
 
 | Path | What it holds |
 |---|---|
-| `protify/` | [Protify](https://github.com/Synthyra/Protify), pinned as a submodule at `895a96c` on its `tap-probing` branch, whose `interpretability` package trained, scored and drew everything (the commit of each run is in `docs/runs.md`) |
+| `protify/` | [Protify](https://github.com/Synthyra/Protify), pinned as a submodule at `ca7bbd2` on its `tap-probing` branch, whose `interpretability` package trained, scored and drew everything (the commit of each run is in `docs/runs.md`) |
 | `tap_probing/reproduce.py` | downloads the results archive and redraws every figure and table with Protify's own drawing code |
 | `tap_probing/archive.py` | restores Protify's run layout from the archive and reads its compacted score tables |
 | `tap_probing/cross_model.py` | the Supplement's figures and tables that place the three models on one relative depth axis |
@@ -44,22 +44,23 @@ PYTHONPATH=protify:. python -P -m tap_probing.reproduce --out reproduced
 ```
 
 `-P` (Python 3.11 or later) keeps the clone's own folder off the front of the import path, where its `foundry` package
-would hide Protify's. The script downloads both archives at their pinned revisions (about 300 MB and 7,000 small tables; at the Hub's rate
-limit it pauses and resumes), checks that each model's rebuilt probe summary matches the one written when the paper's
+would hide Protify's. The script downloads both archives at their pinned revisions (about 300 MB and 13,000 small tables; at the Hub's rate
+limit it pauses and resumes, and a Hugging Face token in `HF_TOKEN` raises that limit; on Windows, pass a short `--out`
+folder, since the archives' paths pass the 260-character limit under a long one), checks that each model's rebuilt probe summary matches the one written when the paper's
 figures were drawn, and writes:
 
 | Folder | Paper items |
 |---|---|
-| `reproduced/trends` | Figures 2, 7, 9 and 10 (emergence, controls, model size, the 2024 interaction gold standard) and S27 (the 2026 one) |
-| `reproduced/familiarity` | Figures 8 and S26: probe correctness against each model's pseudo log likelihood of the protein |
-| `reproduced/cross_model` | Figures 3 (state rankings), S1 to S3, Tables S1 to S4 |
-| `reproduced/probe_gap` | Figures 4 (what a nonlinear readout adds), S21 to S23 |
-| `reproduced/causal` | Figures 5 and 6 (lenses, write ablations, erasure), S24 and S25 |
-| `reproduced/trends_mean`, `reproduced/cross_model_mean` | Figures S4 and S5: the survey on the pooled mean |
-| `reproduced/main` | ESMC-300 figures of the Supplement: controls, state maps, heads, rotation, random-init comparison, ProtParam targets and the settings sweep (Figures S6 to S14), phosphomimetic scanning (S29) |
+| `reproduced/trends` | Figures 2, 8, 10 and 11 (emergence, controls, model size, the interaction gold standard) and S14 (the newer gold standard) |
+| `reproduced/familiarity` | Figures 9 and S13: probe correctness against each model's pseudo log likelihood of the protein |
+| `reproduced/cross_model` | Figures 3 and 4 (kinds of state by kinds of concept, the structure stream), S1 to S3, Tables S1 to S4 |
+| `reproduced/probe_gap` | Figures 5 (what a nonlinear readout adds), S8 to S10 |
+| `reproduced/causal` | Figures 6 and 7 (lenses, write ablations, erasure), S11 and S12 |
+| `reproduced/pooling` | Figures S4 to S7 (MLP probes) and S25 (pooling), Tables S5 and S6: pooling and MLP probes, three seeds of every model |
+| `reproduced/main` | ESMC-300 figures of the Supplement: controls, random-init comparison, state maps, heads, rotation and ProtParam targets (Figures S15 to S22), the settings sweep (S27) and phosphomimetic scanning (S29) |
+| `reproduced/trends_mean`, `reproduced/cross_model_mean` | Figures S23 and S24: the survey on the pooled mean |
+| `reproduced/compare` | raw against unit-norm states (Figure S26) |
 | `reproduced/raw` | the same on raw token states, and the principal-component views (Figure S28) |
-| `reproduced/compare` | raw against unit-norm states (Figure S15) |
-| `reproduced/pooling` | Figures S16 to S20 and Tables S5 and S6: pooling and MLP probes, three seeds of every model |
 | `reproduced/esmc600`, `reproduced/esmc6b` | per-model tables of the larger models |
 
 On Windows, either enable long paths or keep `--out` short: the Hub client's cache paths under the pooling archive

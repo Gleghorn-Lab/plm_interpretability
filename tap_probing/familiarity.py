@@ -45,6 +45,7 @@ DRAWS = 1000
 DRAW_SEED = 0
 QUINTILES = 5
 THRESHOLD = 0.1  # a kind reads as familiarity-driven above this median partial rho (fixed before launch)
+KIND_TAGS = {"sorting and topology": "sorting, topology", "InterPro membership": "InterPro"}  # short names inside figures
 TASKS = tuple(task for _, tasks in KINDS for task in tasks)
 
 
@@ -246,8 +247,8 @@ def _kind_bands(axis: Axes, rows: list[str]) -> None:
         stop = start + len(members)
         if start > 0:
             axis.axhline(start - 0.5, color=GRID, lw=0.6, zorder=0)
-        axis.text(1.01, 1 - (start + stop) / 2 / len(rows), kind, transform=axis.transAxes, fontsize=5.5, color=INK_SECONDARY,
-                  va="center", ha="left")
+        axis.text(1.01, 1 - (start + stop) / 2 / len(rows), KIND_TAGS.get(kind, kind), transform=axis.transAxes, fontsize=5.5,
+                  color=INK_SECONDARY, va="center", ha="left")
         start = stop
 
 
@@ -262,9 +263,9 @@ def familiarity_figure(correlation: pd.DataFrame, quintiles: pd.DataFrame, path:
     rows = _task_rows(correlation["task"])
     positions = {task: index for index, task in enumerate(rows)}
     colors = {"trained": PALETTE[0], "random300": PALETTE[1], "onehot": MUTED}
-    names = {"trained": "ESMC-300", **dict(CONTROLS)}
-    figure = plt.figure(figsize=(7.2, 4.6))
-    grid = figure.add_gridspec(2, 4, height_ratios=[1.35, 1.0], hspace=0.55, wspace=0.45)
+    names = {"trained": "ESMC-300", "random300": "random init", "onehot": "one-hot"}
+    figure = plt.figure(figsize=(7.2, 4.8))
+    grid = figure.add_gridspec(2, 4, height_ratios=[2.3, 1.0], hspace=0.42, wspace=0.42)
     left, right = figure.add_subplot(grid[0, :2]), figure.add_subplot(grid[0, 2:])
     offsets = {"trained": -0.22, "random300": 0.0, "onehot": 0.22}
     for encoder in ("trained", "random300", "onehot"):
@@ -277,7 +278,7 @@ def familiarity_figure(correlation: pd.DataFrame, quintiles: pd.DataFrame, path:
         y = np.array([positions[task] for task in table["task"]]) + offset
         right.errorbar(table["rho"], y, xerr=[table["rho"] - table["low"], table["high"] - table["rho"]], fmt="o", ms=3, color=colors[control],
                        ecolor=colors[control], elinewidth=0.6, capsize=0)
-    for axis, label in ((left, "Spearman's ρ, PPLL with per-protein score"), (right, "partial ρ, PPLL with ESMC-300's gain over the control")):
+    for axis, label in ((left, "ρ, PPLL with score"), (right, "partial ρ, PPLL with gain")):
         axis.axvline(0, color=INK_SECONDARY, lw=0.6, zorder=0)
         axis.set_yticks(range(len(rows)))
         axis.set_yticklabels([SHORT_LABELS.get(task, task) for task in rows], fontsize=6)
@@ -286,6 +287,8 @@ def familiarity_figure(correlation: pd.DataFrame, quintiles: pd.DataFrame, path:
         axis.grid(axis="x", color=GRID, lw=0.5)
         axis.tick_params(labelsize=6)
     right.set_yticklabels([])
+    gains = [Line2D([], [], color=colors[control], marker="o", ms=3, lw=0.6) for control in ("random300", "onehot")]
+    right.legend(gains, ["gain over random init", "gain over one-hot"], loc="upper left", frameon=False, fontsize=5.5, handlelength=1.4)
     _kind_bands(right, rows)
     _letter(left, "A", x=-0.32)
     _letter(right, "B")
@@ -296,15 +299,15 @@ def familiarity_figure(correlation: pd.DataFrame, quintiles: pd.DataFrame, path:
         for column, encoder in (("score_trained", "trained"), ("score_random300", "random300"), ("score_onehot", "onehot")):
             axis.plot(table.index, table[column], marker="o", ms=2.5, lw=1.0, color=colors[encoder])
         axis.set_xticks(range(1, QUINTILES + 1))
-        axis.set_xlabel("PPLL quintile (1 least predictable)", fontsize=6)
+        axis.set_xlabel("PPLL quintile", fontsize=6.5)
         if index == 0:
-            axis.set_ylabel("mean per-protein score", fontsize=6.5)
+            axis.set_ylabel("mean score", fontsize=6.5)
         axis.grid(color=GRID, lw=0.5)
         axis.tick_params(labelsize=6)
-        _tag(axis, f"{kind} ({quintiles[quintiles['kind'] == kind]['task'].nunique()})")
+        _tag(axis, KIND_TAGS.get(kind, kind))
         _letter(axis, "CDEF"[index], x=-0.18)
     key = [Line2D([], [], color=colors[encoder], marker="o", ms=3, lw=1.0) for encoder in ("trained", "random300", "onehot")]
-    figure.legend(key, [names[encoder] for encoder in ("trained", "random300", "onehot")], loc="lower center", bbox_to_anchor=(0.5, 0.94),
+    figure.legend(key, [names[encoder] for encoder in ("trained", "random300", "onehot")], loc="lower center", bbox_to_anchor=(0.5, 0.92),
                   ncol=3, fontsize=6.5, frameon=False)
     return _save(figure, path)
 
@@ -327,7 +330,7 @@ def models_figure(models: pd.DataFrame, proteins: pd.DataFrame, pplls: dict[str,
         axes[0].errorbar(table["rho"], y, xerr=[table["rho"] - table["low"], table["high"] - table["rho"]], fmt="o", ms=3, color=PALETTE[index],
                          ecolor=PALETTE[index], elinewidth=0.6, capsize=0, label=model)
     axes[0].axvline(0, color=INK_SECONDARY, lw=0.6, zorder=0)
-    axes[0].set_xlabel("Spearman's ρ, own PPLL with own score", fontsize=6.5)
+    axes[0].set_xlabel("ρ, own PPLL with own score", fontsize=6.5)
     distributions = [proteins[proteins["task"] == task]["ppll"].to_numpy() for task in rows]
     parts = axes[1].violinplot(distributions, positions=range(len(rows)), vert=False, widths=0.8, showmedians=True, showextrema=False)
     for body in parts["bodies"]:
@@ -359,6 +362,7 @@ def models_figure(models: pd.DataFrame, proteins: pd.DataFrame, pplls: dict[str,
         shared = reference.index.intersection(pplls[model].index)
         axes[3].scatter(reference[shared], pplls[model][shared], s=1.5, alpha=0.2, color=PALETTE[index], lw=0, rasterized=True)
     axes[3].plot([-4, 0], [-4, 0], color=INK_SECONDARY, lw=0.6, zorder=0)
+    axes[3].text(-3.3, -3.95, "y = x", fontsize=5.5, color=INK_SECONDARY)
     axes[3].set_xlabel("ESMC-300 PPLL", fontsize=6.5)
     axes[3].set_ylabel("larger model's PPLL", fontsize=6.5)
     axes[3].grid(color=GRID, lw=0.5)

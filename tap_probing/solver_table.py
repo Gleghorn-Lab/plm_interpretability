@@ -27,9 +27,10 @@ def solver_table(table: pd.DataFrame, path: Path) -> Path:
     order = {task: index for index, task in enumerate(CONCEPT_ORDER)}
     table = table.sort_values(["task", "selection"], key=lambda column: column.map(order) if column.name == "task" else column)
     lines = [r"\begin{table}[p]", r"\centering\small",
-             r"\caption{\textbf{Converged solvers against the global AdamW setting.} For each protein task of ESMC-300 (seed 24895, "
+             r"\caption{\textbf{Converged solvers against the global AdamW setting.} For each protein task of ESMC-300 (one seed, "
              r"unit-norm states), the full-width probe chosen on validation among all sites and among residual-stream states, refitted "
-             r"with a validation-tuned L2 penalty by L-BFGS (ridge regression for ProtParam); test MCC, and cosine similarity for ProtParam.}",
+             r"with a validation-tuned L2 penalty by L-BFGS (ridge regression for ProtParam). Scores are test MCC, and cosine similarity "
+             r"for ProtParam.}",
              r"\label{tab:solver}", r"\begin{tabular}{@{}l l l r r r@{}}", r"\toprule",
              r"Task & Chosen among & State & AdamW & Solver & Difference \\", r"\midrule"]
     for _, row in table.iterrows():

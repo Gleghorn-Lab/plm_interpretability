@@ -65,6 +65,57 @@ def test_staged_survey_reads_back_through_overlay(tmp_path: Path) -> None:
         archive.overlay(tmp_path / "survey", runs)  # a staged file never replaces one already there
 
 
+def restored_task(folder: Path, sites: list[str], names: list[str]) -> None:
+    """A restored task folder in the archive's compacted layout: one condition per probe and a run record of `sites`."""
+    folder.mkdir(parents=True)
+    keys = {"task": "topology", "family": "full", "probe_name": names}
+    pd.DataFrame(keys | {"plm": "trained", "probe": "trained", "control": "original", "full": 0.5, "halves_mean": 0.5,
+                         "halves_std": 0.01, "halves": 7}).to_parquet(folder / "scores.parquet", index=False)
+    pd.DataFrame(keys | {"validation_score": 0.4, "validation_loss": 0.6}).to_parquet(folder / "probes.parquet", index=False)
+    record = {"task": {"name": "topology", "level": "residue"}, "spec": {"sites": sites, "per_head": True}}
+    (folder / "run.json").write_text(json.dumps(record), encoding="utf-8")
+
+
+def test_merge_sites_joins_the_block_sites_to_the_stream_probes(tmp_path: Path) -> None:
+    runs = tmp_path / "runs"
+    stream, sites = runs / "run_6b_norm" / "results" / "linear" / "topology", runs / "run_6b_sites" / "results" / "linear" / "topology"
+    restored_task(stream, ["embedding", "resid_post", "final_norm"], ["embedding:0", "resid_post:0", "final_norm:1"])
+    restored_task(sites, ["q", "mlp_act"], ["q:0", "mlp_act:0"])
+    added = archive.merge_sites(runs)
+
+    assert added["probe_name"].tolist() == ["q:0", "mlp_act:0"] and set(added["root"]) == {"run_6b_norm"}
+    assert not (runs / "run_6b_sites").exists()
+    assert pd.read_parquet(stream / "scores.parquet")["probe_name"].tolist() == ["embedding:0", "resid_post:0", "final_norm:1", "q:0", "mlp_act:0"]
+    assert len(pd.read_parquet(stream / "probes.parquet")) == 5
+    record = json.loads((stream / "run.json").read_text(encoding="utf-8"))
+    assert record["spec"]["sites"] == ["embedding", "q", "mlp_act", "resid_post", "final_norm"]  # in the sites' order
+    assert record["merged_from"] == "run_6b_sites"
+
+    restored_task(sites, ["resid_post"], ["resid_post:0"])  # a probe already in the target
+    with pytest.raises(ValueError, match="resid_post:0"):
+        archive.merge_sites(runs)
+
+
+def test_merge_sites_joins_a_structure_roots_pair_tables(tmp_path: Path) -> None:
+    runs = tmp_path / "runs"
+    survey, structure = runs / "run_norm_s24896" / "results" / "linear" / "ppi2", runs / "run_norm_s24896_struct" / "results" / "linear" / "ppi2"
+    restored_task(survey, ["embedding", "resid_post"], ["embedding:0", "resid_post:0"])
+    restored_task(structure, ["structural"], ["structural:0"])
+    for folder, names in ((survey, ["embedding:0", "resid_post:0"]), (structure, ["structural:0"])):
+        pd.DataFrame({"task": "ppi2", "family": "full", "probe_name": names, "split": "test", "roc_auc": 0.6}).to_parquet(folder / "ranking.parquet", index=False)
+    pd.DataFrame({"task": "ppi2", "family": "full", "probe_name": ["structural:0"]}).to_parquet(structure / "elementwise.parquet", index=False)
+    added = archive.merge_sites(runs)
+
+    assert added.to_dict("records") == [{"task": "topology", "family": "full", "probe_name": "structural:0", "root": "run_norm_s24896"}]
+    assert pd.read_parquet(survey / "ranking.parquet")["probe_name"].tolist() == ["embedding:0", "resid_post:0", "structural:0"]
+    assert not (survey / "elementwise.parquet").exists()  # a table the survey root never had is not joined
+    assert json.loads((survey / "run.json").read_text(encoding="utf-8"))["spec"]["sites"] == ["embedding", "resid_post", "structural"]
+
+    restored_task(structure, ["structural"], ["structural:1"])  # no ranking metrics, which the survey root has
+    with pytest.raises(FileNotFoundError, match="ranking.parquet"):
+        archive.merge_sites(runs)
+
+
 def test_snapshot_resumes_after_the_rate_limit_and_raises_other_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     calls = []
 

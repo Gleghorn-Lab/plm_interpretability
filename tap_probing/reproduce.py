@@ -56,12 +56,17 @@ def draw_model(runs: Path, roots: Sequence[str], out: Path, blocks: int, random_
     return figures.draw(_roots(runs, roots), out, blocks, label, _roots(runs, random_roots), phospho, latent, rankings, metadata)
 
 
-def verify(runs: Path, analyses: Path) -> None:
-    """Each model's rebuilt summary against the one Protify wrote when the figures were drawn."""
+def verify(runs: Path, analyses: Path, added: pd.DataFrame) -> None:
+    """Each model's rebuilt summary against the one Protify wrote when the figures were drawn, leaving out the probes
+    `archive.merge_sites` added to the model's roots after it (`added`)."""
     for model, folder in REFERENCES.items():
         reference = analyses / folder / "summary.parquet"
         if reference.exists():
-            difference = archive.verify(archive.model_summary(_roots(runs, archive.MODELS[model])), pd.read_parquet(reference))
+            mine = added[added["root"].isin(archive.MODELS[model])]
+            later = set(map(tuple, mine[["task", "family", "probe_name"]].itertuples(index=False)))
+            summary = archive.model_summary(_roots(runs, archive.MODELS[model]))
+            summary = summary[[key not in later for key in zip(summary["task"], summary["family"], summary["probe_name"])]]
+            difference = archive.verify(summary.reset_index(drop=True), pd.read_parquet(reference))
             print(f"{model}: summary matches the archive's to {difference:.1e}")
 
 
@@ -77,11 +82,18 @@ def cross_model_figures(runs: Path, out: Path, label: str = "linear") -> list[Pa
     best.to_csv(out / "best_states_all.csv", index=False, float_format="%.4f")
     kinds = pd.concat([cross_model.kind_gaps(summary).assign(model=model) for model, summary in summaries.items()])
     kinds.to_csv(out / "state_concepts.csv", float_format="%.4f")
-    return [cross_model.state_concepts(summaries, out / "state_concepts.png"), out / "state_concepts.csv",
-            cross_model.depth_all(summaries, archive.BLOCKS, random, onehot, out / "depth_all.png"),
-            cross_model.site_gaps_all(summaries, out / "site_gaps_all.png"),
-            cross_model.best_depth_all(best, out / "best_depth_all.png"),
-            cross_model.best_block_tables(best, out / "best_blocks.tex"), out / "best_states_all.csv"]
+    written = [cross_model.state_concepts(summaries, out / "state_concepts.png"), out / "state_concepts.csv",
+               cross_model.depth_all(summaries, archive.BLOCKS, random, onehot, out / "depth_all.png"),
+               cross_model.site_gaps_all(summaries, out / "site_gaps_all.png"),
+               cross_model.best_depth_all(best, out / "best_depth_all.png"),
+               cross_model.best_block_tables(best, out / "best_blocks.tex"), out / "best_states_all.csv"]
+    structure = cross_model.structure_table(summaries, best)
+    if not structure.empty:  # the structure stream's probes, joined to every root of the main text
+        random_best = cross_model.best_table({"ESMC-300 random init": random}, {"ESMC-300 random init": archive.BLOCKS["ESMC-300"]})
+        random_structure = cross_model.structure_table({"ESMC-300 random init": random}, random_best)
+        pd.concat([structure, random_structure]).to_csv(out / "structure_stream.csv", index=False, float_format="%.4f")
+        written += [cross_model.structure_gaps(structure, out / "structure_gaps.png"), out / "structure_stream.csv"]
+    return written
 
 
 def pooling(source: Path, out: Path) -> list[Path]:
@@ -114,6 +126,7 @@ def main() -> None:
     written += familiarity.write_all(pooled / "familiarity", args.out / "familiarity")
     source = args.archive or archive.download(args.out / "archive")
     runs = archive.overlay(pooled / "survey", archive.restore(source, args.out / "runs"))
+    added = archive.merge_sites(runs)  # ESMC-6B's residue probes inside the block, joined to its stream probes
     # The Supplement's mean-only label on every root of the survey it repeats; raw states have no mean-only probes at
     # every seed and are read under mean and variance pooling only.
     for group in (archive.MODELS, archive.RANDOM, archive.BASELINES):
@@ -121,7 +134,7 @@ def main() -> None:
             for root in _roots(runs, roots):
                 archive.compose(root)
     archive.install()
-    verify(runs, source / "analyses" / "final2")
+    verify(runs, source / "analyses" / "final2", added)
     # The main text reads every model under mean and variance pooling (`linear`), with both pair tasks; the Supplement
     # repeats its trends on the pooled mean (`MEAN_POOLED`), with `ppi` alone, since `ppi2` ran under mean and variance.
     for label, folder in (("linear", "trends"), (archive.MEAN_POOLED, "trends_mean")):
@@ -135,7 +148,7 @@ def main() -> None:
     written += draw_model(runs, archive.MODELS["ESMC-6B"], args.out / "esmc6b", 80)
     # Raw against unit-norm states, three seeds each, on the pooled mean and variance (raw states have no mean-only
     # probes at seed 24897).
-    variants = {"normalized": [(root, "linear") for root in _roots(runs, archive.MODELS["ESMC-300"])],
+    variants = {"unit-norm": [(root, "linear") for root in _roots(runs, archive.MODELS["ESMC-300"])],
                 "raw": [(root, "linear") for root in _roots(runs, archive.RAW)]}
     written += figures.compare(variants, args.out / "compare", 30)
     written += cross_model_figures(runs, args.out / "cross_model")

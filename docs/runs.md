@@ -1,6 +1,6 @@
 # The runs
 
-Every run used the `interpretability` package of Protify's `tap-probing` branch (`protify/`, pinned at `895a96c`, run
+Every run used the `interpretability` package of Protify's `tap-probing` branch (`protify/`, pinned at `ca7bbd2`, run
 as `python -m src.protify.interpretability` from the submodule): the survey at `13c37ae`, the later runs at the commits
 their sections name, in Docker with PyTorch and CUDA 12.6 on one NVIDIA GH200
 (96 GB). Below, `P` stands for that command. Each analysis lives in a *root* folder; a root holds its pooled stores
@@ -61,7 +61,8 @@ P intervals --root <root> --tasks ppi2                                      # 1,
 ```
 
 ESMC-600 and ESMC-6B add `--model ESMC-600` or `--model ESMC-6B`; ESMC-6B adds `--no-untrained` (its untrained-model
-stores would take about 600 GB) and reads only the residual stream on the residue tasks (`--sites residual`).
+stores would take about 600 GB) and reads only the residual stream on the residue tasks (`--sites residual`), which the
+in-block run below completes.
 
 ## Interventions and latent views (ESMC-300, `run`)
 
@@ -73,9 +74,9 @@ P pca --root run --tasks interpro_family,interpro_domain,interpro_homologous_sup
 ## Figures
 
 `python -m tap_probing.reproduce` runs the drawing steps (`figures`, `trends`, `compare`) on the archived results, as
-the study did on the GH200, with the submodule's commit `895a96c`, the branch's latest: its drawing code (`figures`, `trends`) is the survey
-commit's `13c37ae` but for one shortened axis label of the pair figure, and the commits named below add the later
-runs' commands.
+the study did on the GH200, with the submodule's commit `ca7bbd2`, the branch's latest: its drawing code (`figures`, `trends`) draws the
+survey commit's `13c37ae` numbers with the revised labels, legends and layouts of 2026-10-21, and the commits named
+below add the later runs' commands.
 
 ## The pooling and MLP study (Protify `ddc1d03`)
 
@@ -179,4 +180,43 @@ sequence of the 22 tasks in one unmasked bfloat16 forward pass; a protein's PPLL
 log probability of the observed residue. The archive keeps, under `familiarity/<encoder>/`, the per-protein outputs
 (`predictions.parquet`), each seed's task score recomputed from them beside Protify's (`checks.parquet`), the PPLLs
 with every residue's log probability (`ppll.parquet`), the manifest and Protify's tables for each probe;
-`tap_probing.familiarity` draws Figures 8 and S26 from them.
+`tap_probing.familiarity` draws Figures 9 and S13 from them.
+
+## ESMC-6B's residue probes inside the block (Protify `13c37ae`, `run_6b_sites`)
+
+The survey's ESMC-6B residue probes read the residual stream only; these read the 14 sites inside each of its 80
+blocks with their single heads, under the same code, setting, seed and unit-norm states, on one GH200 alone
+(experiment `2026-10-21_esmc6b_residue_sites`). Each probe draws its own initial weights, sees the same batches and
+stops on its own validation loss, so `tap_probing.archive.merge_sites` joins the root's tables to `run_6b_norm`'s per
+task, with no probe in both. The archive added `runs/run_6b_sites/` at `c2a6f50a` and its logs at `2ffed6f6`.
+
+```bash
+P train --model ESMC-6B --root run_6b_sites --tasks residue --label linear --train-tokens 32768 --lr 3e-3 --wd 0.1 \
+  --max-epochs 10 --patience 3 --normalize --no-untrained \
+  --sites attn_ln,q,k,q_rot,k_rot,v,attn_context,attn_out,resid_mid,mlp_ln,mlp_gate,mlp_up,mlp_act,mlp_out
+```
+
+## The structure stream (Protify `c707586`, `<root>_struct`)
+
+ESMFold2's structure stream, the softmax-weighted sum of the embedding, every block output but the last and the final
+norm, each normalized and projected to 256 columns with the released weights of the ESMFold2 built on the model
+(Protify's site `structural`), probed for every root of the main text: `run_norm*`, `run_random_norm*`,
+`run_600_norm` and `run_6b_norm` (experiment `2026-10-21_esmc_structure_stream`). Each root's commands above repeat on
+that one site into `<root>_struct`, which `merge_sites` joins to the root:
+
+```bash
+SITE="--sites structural --normalize"
+P embed --root <root>_struct --tasks protein,ppi2,ppi --controls --max-tokens 65536 $SITE
+P train --root <root>_struct --tasks protein --label linear --batch-size 256 --lr 0.03 --wd 0 --max-epochs 100 --patience 10 $SITE
+P train --root <root>_struct --tasks prot_param --label linear --batch-size 1024 --lr 1e-3 --wd 0.1 --max-epochs 100 --patience 10 $SITE
+P train --root <root>_struct --tasks ppi2 --label linear --lr 0.01 --wd 0.1 --batch-size 1024 --max-epochs 100 --patience 10 $SITE
+P train --root <root>_struct --tasks ppi --label linear --lr 0.0003 --wd 0.1 --batch-size 1024 --max-epochs 100 --patience 10 $SITE
+P intervals --root <root>_struct --tasks ppi2,ppi
+P train --root <root>_struct --tasks protein,ppi --label linear_mean --pooling mean ...   # the same settings
+P train --root <root>_struct --tasks residue --label linear --train-tokens 32768 --lr 3e-3 --wd 0.1 --max-epochs 10 --patience 3 $SITE
+```
+
+The randomly initialized model's roots embed with `--random-init` in place of `--controls` and train with
+`--random-init --no-controls`; ESMC-6B adds `--no-untrained` and embeds at `--max-tokens 32768`. The archive added the
+eight roots under `runs/<root>_struct/` at `e36dff8b` and their logs under `logs/structure_stream/` at `a1ca0961`, the
+revision `tap_probing.archive.REVISION` pins.

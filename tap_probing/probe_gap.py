@@ -27,7 +27,6 @@ import argparse
 import numpy as np
 import pandas as pd
 
-from collections.abc import Sequence
 from pathlib import Path
 
 from tap_probing.pooling_study import KIND_OF, KINDS, gains_table, rows_of, task_sizes
@@ -125,12 +124,14 @@ def probe_gap_figure(gains: pd.DataFrame, states: pd.DataFrame, path: Path, stat
     (each task's score as a share of its best stream score, averaged over the seven tasks) and composition along
     ESMC-600's residual stream under linear and MLP probes. On the pooled mean: D, InterPro membership along the same
     stream under the linear probe, the MLP without its activation and the MLP."""
-    from matplotlib.lines import Line2D
     from src.protify.interpretability.figures import GRID, INK_SECONDARY, PALETTE, _letter, _pyplot, _save
 
     plt = _pyplot()
     has_variants = "bottleneck_mean" in states and states.loc[states["condition"] == FOCUS, "bottleneck_mean"].notna().any()
-    figure, axes = plt.subplots(1, 4 if has_variants else 3, figsize=(7.2, 2.5), gridspec_kw={"width_ratios": [1.25, 1.0, 1.1] + ([1.1] if has_variants else [])})
+    figure, grid = plt.subplots(2, 2, figsize=(7.2, 3.7))
+    axes = grid.ravel()
+    if not has_variants:
+        axes[3].remove()
     models = [(condition, model) for condition, model in CONDITIONS if (gains["condition"] == condition).any()]
     model_colors = dict(zip([condition for condition, _ in CONDITIONS], [PALETTE[0], PALETTE[1], PALETTE[2], PALETTE[7]]))
     probes = [(quantity, name) for quantity, name in PROBES if (gains["quantity"] == quantity).any()]
@@ -146,10 +147,9 @@ def probe_gap_figure(gains: pd.DataFrame, states: pd.DataFrame, path: Path, stat
                 axis.errorbar(x + offset, estimate, yerr=[[estimate - low], [high - estimate]], fmt="o", ms=3, color=colors[name], lw=0.8,
                               label=name if x == 0 else None)
     axis.set_xticks(range(len(models)))
-    axis.set_xticklabels([model.replace("random-init ESMC-", "random\n").replace("ESMC-", "") for _, model in models], fontsize=5.5)
-    axis.set_xlabel("ESMC model")
-    axis.set_ylabel("mean best score, 13 tasks")
-    axis.legend(frameon=False, fontsize=5, loc="center")  # between the trained models' scores and the random model's
+    axis.set_xticklabels([model.replace("random-init ESMC-300", "random init") for _, model in models], fontsize=6)
+    axis.set_ylabel("mean score")
+    axis.legend(frameon=False, fontsize=5.5, loc="center", ncol=3, handletextpad=0.3, columnspacing=1.0)  # between the trained and random rows
     axis = axes[1]
     kinds = [kind for kind, _ in KINDS]
     for index, (condition, model) in enumerate(models):
@@ -162,10 +162,10 @@ def probe_gap_figure(gains: pd.DataFrame, states: pd.DataFrame, path: Path, stat
                               color=model_colors[condition], lw=0.8, label=model.replace("random-init ESMC-300", "random init") if y == 0 else None)
     axis.axvline(0, color=INK_SECONDARY, lw=0.7)
     axis.set_yticks(range(len(kinds)))
-    axis.set_yticklabels(kinds, fontsize=5.5)
-    axis.set_ylim(len(kinds) + 0.6, -0.6)  # inverted, with room below the last kind for the legend
+    axis.set_yticklabels(kinds, fontsize=6)
+    axis.set_ylim(len(kinds) - 0.4, -0.6)
     axis.set_xlabel("MLP minus converged linear")
-    axis.legend(frameon=False, fontsize=4.5, loc="lower right", ncol=2, handletextpad=0.3, columnspacing=0.8)
+    axis.legend(frameon=False, fontsize=5.5, loc="upper right", ncol=2, handletextpad=0.3, columnspacing=0.8)
     axis = axes[2]
     stream = states[(states["condition"] == FOCUS) & states["site"].isin(STREAM)]
     interpro = stream[stream["kind"] == "InterPro membership"]
@@ -174,29 +174,29 @@ def probe_gap_figure(gains: pd.DataFrame, states: pd.DataFrame, path: Path, stat
         best = interpro.groupby("task")[column].transform("max")
         profile = (interpro[column] / best).groupby(interpro["relative_depth"]).mean()
         axis.plot(profile.index, profile.values, color=color, lw=1.1, label=f"InterPro, {name}")
+    for column, color, name in (("linear", PALETTE[0], "linear"), ("mlp", PALETTE[1], "MLP")):
         axis.plot(composition["relative_depth"], composition[column] / composition[column].max(), color=color, ls=":", lw=1.0,
                   label=f"composition, {name}")
-    axis.set_xlabel(f"relative depth, {dict(CONDITIONS)[FOCUS]} stream")
-    axis.set_ylabel("share of the best stream score")
-    axis.set_ylim(bottom=min(axis.get_ylim()[0], 0.4))  # room below the profiles for the key
-    key = [Line2D([], [], color=PALETTE[0], lw=1.1), Line2D([], [], color=PALETTE[1], lw=1.1),
-           Line2D([], [], color=INK_SECONDARY, lw=1.1), Line2D([], [], color=INK_SECONDARY, lw=1.0, ls=":")]
-    axis.legend(key, ["linear", "MLP", "InterPro", "composition"], frameon=False, fontsize=5, loc="lower right", handlelength=1.2)
+    axis.set_ylabel("relative score")
+    axis.legend(frameon=False, fontsize=5.5, loc="lower right", ncol=2, handlelength=1.6, columnspacing=0.8)
     if has_variants:
         axis = axes[3]
-        for column, color, name in (("linear_mean", PALETTE[0], "linear"), ("bottleneck_mean", PALETTE[2], "no activation"),
+        for column, color, name in (("linear_mean", PALETTE[0], "linear"), ("bottleneck_mean", PALETTE[2], "MLP without activation"),
                                     ("mlp_mean", PALETTE[1], "MLP")):
             best = interpro.groupby("task")[column].transform("max")
             profile = (interpro[column] / best).groupby(interpro["relative_depth"]).mean()
             axis.plot(profile.index, profile.values, color=color, lw=1.1, label=name)
-        axis.set_xlabel("relative depth")
-        axis.set_ylabel("InterPro share, pooled mean")
+        axis.set_ylabel("relative score")
         axis.set_ylim(axes[2].get_ylim())
-        axis.legend(frameon=False, fontsize=5, loc="lower right", handlelength=1.2)
-    for letter, axis in zip("ABCD", axes):
+        axis.legend(frameon=False, fontsize=5.5, loc="lower right", handlelength=1.6)
+    for axis in axes[2:4] if has_variants else axes[2:3]:
+        axis.set_xlabel(f"relative depth ({dict(CONDITIONS)[FOCUS]})")
+        axis.set_xlim(0, 1)
+    for letter, axis in zip("ABCD", axes if has_variants else axes[:3]):
         axis.grid(color=GRID, lw=0.5)
+        axis.tick_params(labelsize=6)
         _letter(axis, letter)
-    figure.tight_layout(w_pad=0.8)
+    figure.tight_layout(w_pad=1.0, h_pad=1.2)
     return _save(figure, path)
 
 

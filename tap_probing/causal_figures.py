@@ -180,22 +180,32 @@ def lens_ablation_figure(lens: pd.DataFrame, ablation: pd.DataFrame, path: Path,
                              ls="-" if write == "ffn" else ":")
     if unigram is not None:
         axes[0].axhline(unigram, color=INK_SECONDARY, ls=":", lw=0.8)
-        axes[0].text(0.02, unigram, "most frequent residue", fontsize=5, color=INK_SECONDARY, va="bottom")
-    axes[0].set_ylabel("masked top-1 accuracy")
-    axes[1].set_ylabel("identity readout NLL (nats)")
+    axes[0].set_ylabel("masked accuracy")
+    axes[1].set_ylabel("identity readout loss (nats)")
     axes[1].set_yscale("log")
-    axes[2].set_ylabel("masked NLL cost (nats)")
+    axes[2].set_ylabel("loss increase (nats)")
     for letter, axis in zip("ABC", axes):
         axis.set_xlabel("relative depth")
         axis.set_xlim(0, 1.0)
         axis.grid(color=GRID, lw=0.5)
         _letter(axis, letter)
-    handles = [plt.Line2D([], [], color=color, lw=1.2) for color in colors.values()]
-    handles += [plt.Line2D([], [], color=INK, ls="-", lw=1.0), plt.Line2D([], [], color=INK, ls="--", lw=1.0),
-                plt.Line2D([], [], color=INK, marker="o", ls=":", ms=3, lw=0.7), plt.Line2D([], [], color=INK, marker="s", ls="-", ms=3, lw=0.7)]
-    labels = list(colors) + ["logit lens", "tuned lens", "attention write", "feed-forward write"]
-    figure.legend(handles, labels, loc="upper center", ncol=7, frameon=False, fontsize=5.5)
-    figure.tight_layout(rect=(0, 0, 1, 0.9), w_pad=1.0)
+    # One key per panel, each entry drawn as its line is: in the model's color when one model is drawn, else in ink
+    # beside a key of the models' colors.
+    ink = next(iter(colors.values())) if len(colors) == 1 else INK
+    lenses = [plt.Line2D([], [], color=ink, ls="-", lw=1.1), plt.Line2D([], [], color=ink, ls="--", lw=1.1)]
+    names = ["logit lens", "tuned lens"]
+    if unigram is not None:
+        lenses.append(plt.Line2D([], [], color=INK_SECONDARY, ls=":", lw=0.8))
+        names.append("most common residue")
+    axes[0].legend(lenses, names, frameon=False, fontsize=5.5, loc="upper left", handlelength=1.8)
+    writes = [plt.Line2D([], [], color=ink, marker="o", ls=":", ms=2.2, lw=0.7), plt.Line2D([], [], color=ink, marker="s", ls="-", ms=2.2, lw=0.7)]
+    axes[2].legend(writes, ["attention write", "feed-forward write"], frameon=False, fontsize=5.5, loc="upper left", handlelength=1.8)
+    if len(colors) > 1:
+        handles = [plt.Line2D([], [], color=color, lw=1.2) for color in colors.values()]
+        figure.legend(handles, list(colors), loc="upper center", ncol=len(colors), frameon=False, fontsize=5.5)
+        figure.tight_layout(rect=(0, 0, 1, 0.92), w_pad=1.0)
+    else:
+        figure.tight_layout(w_pad=1.0)
     return _save(figure, path)
 
 
@@ -203,7 +213,7 @@ def erasure_figure(mlm: pd.DataFrame, readouts: pd.DataFrame, path: Path) -> Pat
     """Per concept (columns): A, KL from the unerased prediction per masked residue after LEACE erasure (solid) and
     after a random subspace of the same rank (dashed) at each relative depth; B, the concept's linear readability at
     the final norm after erasure at each depth (solid LEACE, dashed random), against the unerased stream (dotted)."""
-    from src.protify.interpretability.figures import GRID, INK, INK_SECONDARY, PALETTE, _letter, _pyplot, _save, _tag
+    from src.protify.interpretability.figures import GRID, INK, PALETTE, _letter, _pyplot, _save, _tag
 
     plt = _pyplot()
     colors = {model: PALETTE[index] for index, (_, model) in enumerate(MODELS) if (mlm["model"] == model).any()}  # the models drawn
@@ -229,14 +239,18 @@ def erasure_figure(mlm: pd.DataFrame, readouts: pd.DataFrame, path: Path) -> Pat
         bottom.set_xlabel("relative depth of the erasure")
         if column == 0:
             top.set_ylabel("KL per masked residue (nats)")
-            bottom.set_ylabel("readability at the final norm")
+            bottom.set_ylabel("final-norm readability")
             _letter(top, "A")
             _letter(bottom, "B")
-    handles = [plt.Line2D([], [], color=color, lw=1.2) for color in colors.values()]
-    names = list(colors)
-    handles += [plt.Line2D([], [], color=INK, ls="-"), plt.Line2D([], [], color=INK, ls="--"), plt.Line2D([], [], color=INK_SECONDARY, ls=":")]
-    figure.legend(handles, names + ["LEACE erasure", "random subspace, same rank", "unerased"], loc="upper center", ncol=6, frameon=False, fontsize=5.5)
-    figure.tight_layout(rect=(0, 0, 1, 0.94), h_pad=0.6, w_pad=0.6)
+    # Each entry drawn as its line is: in the model's color when one model is drawn, else in ink beside the models' key.
+    ink = next(iter(colors.values())) if len(colors) == 1 else INK
+    handles = [plt.Line2D([], [], color=ink, ls="-", lw=1.1), plt.Line2D([], [], color=ink, ls="--", lw=1.1), plt.Line2D([], [], color=ink, ls=":", lw=0.8)]
+    names = ["LEACE erasure", "random directions", "unerased"]
+    if len(colors) > 1:
+        handles = [plt.Line2D([], [], color=color, lw=1.2) for color in colors.values()] + handles
+        names = list(colors) + names
+    figure.legend(handles, names, loc="upper center", ncol=len(names), frameon=False, fontsize=6)
+    figure.tight_layout(rect=(0, 0, 1, 0.95), h_pad=0.6, w_pad=0.6)
     return _save(figure, path)
 
 
@@ -259,7 +273,7 @@ def lens_by_structure_figure(lens: pd.DataFrame, path: Path, names: Sequence[str
         _tag(axis, model)
         axis.set_xlabel("relative depth")
         axis.grid(color=GRID, lw=0.5)
-    axes[0][0].set_ylabel("logit-lens masked top-1 accuracy")
+    axes[0][0].set_ylabel("masked accuracy, logit lens")
     axes[0][0].legend(frameon=False, fontsize=5.5)
     figure.tight_layout(w_pad=0.6)
     return _save(figure, path)
@@ -279,7 +293,7 @@ def ablation_zero_figure(ablation: pd.DataFrame, path: Path) -> Path:
         _tag(axis, model)
         axis.set_xlabel("relative depth")
         axis.grid(color=GRID, lw=0.5)
-    axes[0][0].set_ylabel("masked NLL cost (nats)")
+    axes[0][0].set_ylabel("loss increase (nats)")
     axes[0][0].legend(frameon=False, fontsize=5.5)
     figure.tight_layout(w_pad=0.6)
     return _save(figure, path)

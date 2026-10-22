@@ -26,7 +26,7 @@ from tap_probing.pooling import pool_halves
 
 
 REPO = "GleghornLab/esmc_tap_probing_results"
-REVISION = "9f5e7b31"
+REVISION = "a1ca0961"
 KEYS = ["task", "family", "probe_name", "plm", "probe", "control"]
 VALIDATION = ["task", "family", "probe_name", "validation_score", "validation_loss"]
 RUN_FOLDERS = ("sweeps", "interventions", "latent", "stores", "pilots")
@@ -68,6 +68,13 @@ SURVEY_PATTERNS = [f"survey/{pattern}" for pattern in PATTERNS if pattern.starts
 # drawing code reads one run.
 MEAN_POOLED = "mean_pooled"
 MEAN_ONLY = ("ppi",)  # the pair tasks read on the pooled mean; `ppi2` ran under mean and variance only
+# Roots of later probes, each its own root in the archive that `merge_sites` joins to the survey root it completes:
+# ESMC-6B's residue probes at the sites inside its blocks (experiment 2026-10-21_esmc6b_residue_sites), and the
+# structure stream's probes of every root of the main text (`<root>_struct`, experiment 2026-10-21_esmc_structure_stream).
+SITE_ROOTS = {"run_6b_sites": "run_6b_norm",
+              **{f"{root}_struct": root for roots in (*MODELS.values(), *RANDOM.values()) for root in roots}}
+# The tables of a task folder that hold one row or more per probe, joined by `merge_sites`.
+PROBE_TABLES = ("scores.parquet", "probes.parquet", "ranking.parquet", "intervals.parquet", "elementwise.parquet")
 
 
 def snapshot(repo: str, revision: str, out: Path, patterns: Sequence[str], attempts: int = 12, pause: float = 120.0) -> Path:
@@ -153,6 +160,43 @@ def overlay(survey: Path, runs: Path) -> Path:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
     return runs
+
+
+def merge_sites(runs: Path, roots: dict[str, str] = SITE_ROOTS) -> pd.DataFrame:
+    """Join each restored root of more sites (`roots`' keys) to the root whose probes it completes (`roots`' values):
+    per label and task, each per-probe table the target has (`PROBE_TABLES`: scores and probe records, and a pair task's
+    ranking metrics and intervals or ProtParam's per-target scores) is appended to with the source's, and the run
+    record's sites become both runs' sites; the source root is then removed. A table only the source has (later code
+    writes ranking metrics for every protein task, which the survey's roots lack) stays in the archive unjoined, since
+    no figure reads it. Raises when the target lacks the task, when the source lacks a table the target has (its probes
+    would be missing from it), or when a probe is in both. Returns the probes added (`root`, the target, and `task`,
+    `family`, `probe_name`), which `verify` leaves out."""
+    added = []
+    for source_name, target_name in roots.items():
+        source = runs / source_name
+        if not source.exists():
+            continue
+        for folder in sorted(path for path in (source / "results").glob("*/*") if (path / "run.json").exists()):
+            target = runs / target_name / "results" / folder.parent.name / folder.name
+            if not (target / "run.json").exists():
+                raise FileNotFoundError(f"{target_name} has no {folder.parent.name} probes of {folder.name} to complete.")
+            for name in (name for name in PROBE_TABLES if (target / name).exists()):
+                if not (folder / name).exists():
+                    raise FileNotFoundError(f"{source_name} has no {name} of {folder.parent.name}/{folder.name} to join to {target_name}'s.")
+                old, new = pd.read_parquet(target / name), pd.read_parquet(folder / name)
+                shared = set(old["probe_name"]) & set(new["probe_name"])
+                if shared:
+                    raise ValueError(f"{len(shared)} probes of {folder.name} are in {source_name} and {target_name}, such as {sorted(shared)[0]}.")
+                pd.concat([old, new], ignore_index=True).to_parquet(target / name, index=False)
+            probes = pd.read_parquet(folder / "probes.parquet")
+            added.append(probes[["task", "family", "probe_name"]].assign(root=target_name))
+            record = json.loads((target / "run.json").read_text(encoding="utf-8"))
+            sites = record["spec"]["sites"] + json.loads((folder / "run.json").read_text(encoding="utf-8"))["spec"]["sites"]
+            record["spec"]["sites"] = [site for site in figures.SITE_LABELS if site in sites]
+            record["merged_from"] = source_name
+            (target / "run.json").write_text(json.dumps(record, indent=1), encoding="utf-8", newline="\n")
+        shutil.rmtree(source)
+    return pd.concat(added, ignore_index=True) if added else pd.DataFrame(columns=["task", "family", "probe_name", "root"])
 
 
 def compose(root: Path, label: str = MEAN_POOLED) -> Path:
