@@ -7,8 +7,9 @@ model's rebuilt probe summary against the one written when the figures were firs
 drawing code as the study did (`figures` per model, `trends` across models, `compare` across input treatments) and
 draws the cross-model figures and tables. The three-seed pooling and MLP study has an archive of its own, which also
 holds the survey's mean-only additions, ESMC-600's probe variants and geometry, and its causal analyses: from it
-`tap_probing.pooling_study`, `probe_gap`, `causal_figures` and `familiarity` draw theirs. Outputs:
-`<out>/{pooling,probe_gap,causal,familiarity,trends,trends_mean,main,raw,esmc600,esmc6b,compare,cross_model,cross_model_mean}`.
+`tap_probing.pooling_study`, `probe_gap`, `causal_figures` and `familiarity` draw theirs. `tap_probing.published` draws
+the tuned pair probes beside published predictors from one more table of the first archive. Outputs:
+`<out>/{pooling,probe_gap,causal,familiarity,trends,trends_mean,main,raw,esmc600,esmc6b,compare,cross_model,cross_model_mean,published}`.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from pathlib import Path
 from src.protify.interpretability import figures, trends
 from src.protify.interpretability.selection import rank_settings
 
-from tap_probing import archive, causal_figures, cross_model, familiarity, pooling_study, probe_gap, solver_table
+from tap_probing import archive, causal_figures, cross_model, familiarity, figure_style, pooling_study, probe_gap, published, solver_table
 
 
 PROTEIN_SWEEPS = ("p_b256", "p_b1024")
@@ -65,7 +66,7 @@ def verify(runs: Path, analyses: Path, added: pd.DataFrame) -> None:
             mine = added[added["root"].isin(archive.MODELS[model])]
             later = set(map(tuple, mine[["task", "family", "probe_name"]].itertuples(index=False)))
             summary = archive.model_summary(_roots(runs, archive.MODELS[model]))
-            summary = summary[[key not in later for key in zip(summary["task"], summary["family"], summary["probe_name"])]]
+            summary = summary[[key not in later for key in zip(summary["task"], summary["family"], summary["probe_name"], strict=True)]]
             difference = archive.verify(summary.reset_index(drop=True), pd.read_parquet(reference))
             print(f"{model}: summary matches the archive's to {difference:.1e}")
 
@@ -74,6 +75,9 @@ def cross_model_figures(runs: Path, out: Path, label: str = "linear") -> list[Pa
     """The figures and tables across ESMC-300, ESMC-600 and ESMC-6B: which kinds of state read which kinds of concept
     (the main text), and the Supplement's."""
     summaries = {model: archive.model_summary(_roots(runs, roots), label) for model, roots in archive.MODELS.items()}
+    # the gains inside the block read the main text's pair task beside the concepts
+    gaps = {model: cross_model.intra_block_gaps(summary[summary["task"] != "ppi2"], archive.BLOCKS[model])
+            for model, summary in summaries.items()}
     summaries = {model: summary[~summary["task"].isin(trends.PAIR_TASKS)] for model, summary in summaries.items()}
     random = archive.model_summary(_roots(runs, archive.RANDOM["ESMC-300 random init"]), label)
     onehot = archive.model_summary(_roots(runs, archive.BASELINES["OneHot-Protein"][:1]), label)
@@ -87,6 +91,8 @@ def cross_model_figures(runs: Path, out: Path, label: str = "linear") -> list[Pa
                cross_model.site_gaps_all(summaries, out / "site_gaps_all.png"),
                cross_model.best_depth_all(best, out / "best_depth_all.png"),
                cross_model.best_block_tables(best, out / "best_blocks.tex"), out / "best_states_all.csv"]
+    pd.concat([gap.assign(model=model) for model, gap in gaps.items()]).to_csv(out / "intra_block_gaps.csv", index=False, float_format="%.4f")
+    written += [cross_model.gap_table(gaps, out / "gap_table.tex"), out / "intra_block_gaps.csv"]
     structure = cross_model.structure_table(summaries, best)
     if not structure.empty:  # the structure stream's probes, joined to every root of the main text
         random_best = cross_model.best_table({"ESMC-300 random init": random}, {"ESMC-300 random init": archive.BLOCKS["ESMC-300"]})
@@ -117,6 +123,7 @@ def main() -> None:
     parser.add_argument("--pooling-archive", type=Path, default=None,
                         help="the pooling study's archive already downloaded (default: download into <out>/pooling_archive)")
     args = parser.parse_args()
+    figure_style.install()
     # the pooling study's tables are not compacted, so they are drawn before `install` swaps Protify's readers
     pooled = args.pooling_archive or archive.download_pooling(args.out / "pooling_archive")
     sizes = pooling_study.task_sizes(None)
@@ -154,6 +161,9 @@ def main() -> None:
     written += cross_model_figures(runs, args.out / "cross_model")
     written += cross_model_figures(runs, args.out / "cross_model_mean", archive.MEAN_POOLED)[:2]
     written.append(solver_table.solver_table(pd.read_csv(source / "analyses" / "solver_check.csv"), args.out / "cross_model" / "solver_table.tex"))
+    # the tuned pair probes' summary joined the archive after the survey's pinned revision, so it has its own pin
+    tuned = source / published.SUMMARY_FILE
+    written += published.write_all(tuned if tuned.exists() else published.download_summary(args.out / "archive"), args.out / "published")
     for path in written:
         print(path)
 

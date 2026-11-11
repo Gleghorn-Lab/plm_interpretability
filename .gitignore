@@ -2,3 +2,5 @@ reproduced/
 archive/
 __pycache__/
 *.pyc
+# parity with a script this repository does not carry
+tests/test_units_sae_labels_parity.py

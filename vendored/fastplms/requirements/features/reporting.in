@@ -1,0 +1,4 @@
+matplotlib>=3.11
+scikit-learn>=1.9
+scipy>=1.18
+seaborn>=0.13

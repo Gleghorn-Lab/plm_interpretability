@@ -28,7 +28,11 @@ import argparse
 import numpy as np
 import pandas as pd
 
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
+
+from tap_probing.figure_style import GOLD, PROBE_COLORS, ROW_BAND, interval_marks
 
 
 GAINS = {"linear": ("linear", "linear_mean"), "mlp": ("mlp", "mlp_mean"), "linear_solver": ("linear_solver", "linear_mean_solver")}
@@ -52,12 +56,12 @@ KIND_OF = {task: kind for kind, tasks in KINDS for task in tasks}
 def label_draws(table: pd.DataFrame) -> dict[tuple[str, str, str, str], np.ndarray]:
     """(task, choice, metric, label) -> the value on the whole split followed by every draw: (B + 1,)."""
     ordered = table.sort_values("draw")
-    return {key: group["value"].to_numpy(dtype=np.float64) for key, group in ordered.groupby(["task", "choice", "metric", "label"])}
+    return {key: group["value"].to_numpy(dtype=np.float64) for key, group in ordered.groupby(["task", "choice", "metric", "label"])}  # (B + 1,) each
 
 
 def quantities(draws: dict[tuple[str, str, str, str], np.ndarray]) -> dict[tuple[str, str, str, str], np.ndarray]:
     """Every reported difference and score, keyed by (task, choice, metric, quantity), over the whole split and the draws."""
-    found = {}
+    found = {}  # draws: (B + 1,) each
     for task, choice, metric in {key[:3] for key in draws}:
         values = {key[3]: value for key, value in draws.items() if key[:3] == (task, choice, metric)}
         gains = {kind: values[full] - values[mean] for kind, (full, mean) in GAINS.items() if full in values and mean in values}
@@ -74,12 +78,12 @@ def quantities(draws: dict[tuple[str, str, str, str], np.ndarray]) -> dict[tuple
                 found[(task, choice, metric, "mlp_lead_solver" + ("" if pooling == "mean_var" else "_mean"))] = values[mlp] - values[f"{linear}_solver"]
         for label, value in values.items():
             found[(task, choice, metric, f"score_{label}")] = value
-    return found
+    return found  # (B + 1,) each
 
 
 def summarize(values: np.ndarray) -> tuple[float, float, float]:
     """The whole split's value and the 95% percentile interval of the draws (NaN without draws)."""
-    drawn = values[1:]
+    drawn = values[1:]  # values: (B + 1,)
     drawn = drawn[np.isfinite(drawn)]
     if not len(drawn):
         return float(values[0]), np.nan, np.nan
@@ -89,7 +93,7 @@ def summarize(values: np.ndarray) -> tuple[float, float, float]:
 
 def condition_rows(name: str, found: dict[tuple[str, str, str, str], np.ndarray], sizes: dict[str, int]) -> list[dict[str, object]]:
     """One row per task and quantity, and one per quantity for the mean over tasks, taken draw by draw."""
-    rows = []
+    rows = []  # found: (B + 1,) each
     for (task, choice, metric, quantity), values in sorted(found.items()):
         estimate, low, high = summarize(values)
         rows.append({"condition": name, "task": task, "choice": choice, "metric": metric, "quantity": quantity,
@@ -212,15 +216,17 @@ def ranking_table(gains: pd.DataFrame, state: str, treatment: str = "norm") -> s
              r"Model & Probe & " + " & ".join(rf"\multicolumn{{2}}{{c}}{{{name}}}" for _, name in RANKING) + r" \\",
              r"\cmidrule(lr){3-4}\cmidrule(lr){5-6}\cmidrule(lr){7-8}",
              r" & & " + " & ".join(["mean", "mean, var."] * len(RANKING)) + r" \\", r"\midrule"]
-    for condition, name in model_columns(gains, treatment):
-        for kind, kind_name in (("linear", "linear"), ("mlp", "MLP")):
+    for index, (condition, name) in enumerate(model_columns(gains, treatment)):
+        if index:
+            lines.append(r"\midrule")
+        for row_index, (kind, kind_name) in enumerate((("linear", "linear"), ("mlp", "MLP"))):
             cells = []
             for metric, _ in RANKING:
                 for label in (f"{kind}_mean", kind):
                     row = rows_of(gains, condition, state, f"score_{label}", metric)
                     row = row[row["task"] == "mean"]
                     cells.append(number(row["estimate"].iloc[0], signed=False) if len(row) else "--")
-            lines.append(f"{name} & {kind_name} & " + " & ".join(cells) + r" \\")
+            lines.append(f"{'' if row_index else name} & {kind_name} & " + " & ".join(cells) + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}"]
     return "\n".join(lines) + "\n"
 
@@ -234,24 +240,28 @@ def task_order(gains: pd.DataFrame) -> list[str]:
     return list(sizes.sort_values().index)
 
 
-def interval_panel(axis, gains: pd.DataFrame, condition: str, state: str, series, tasks: list[str], sizes: pd.Series, labelled: bool) -> None:
+def interval_panel(axis: Any, gains: pd.DataFrame, condition: str, state: str, series: Sequence[tuple[str, str, str]], tasks: list[str],
+                   sizes: pd.Series, labelled: bool) -> None:
     """One model's per-task quantities (rows) for each (quantity, legend, color) series, with intervals, and the mean
     over tasks in the last row."""
+    from matplotlib.ticker import MaxNLocator
     from src.protify.interpretability.figures import GRID, INK_SECONDARY, SHORT_LABELS
 
     rows = tasks + ["mean"]
     positions = np.arange(len(rows), dtype=float)
     for position in positions[::2]:
-        axis.axhspan(position - 0.5, position + 0.5, color="#f6f5f2", lw=0, zorder=0)
+        axis.axhspan(position - 0.5, position + 0.5, color=ROW_BAND, lw=0, zorder=0)
+    axis.tick_params(axis="y", length=0)
+    axis.xaxis.set_major_locator(MaxNLocator(4))
     axis.axhline(len(tasks) - 0.5, color=INK_SECONDARY, lw=0.5)
     axis.axvline(0.0, color=INK_SECONDARY, lw=0.7)
     axis.grid(axis="x", color=GRID, lw=0.5)
     offsets = np.linspace(-0.18, 0.18, len(series)) if len(series) > 1 else [0.0]
-    for (quantity, label, color), offset in zip(series, offsets):
+    for (quantity, label, color), offset in zip(series, offsets, strict=True):
         frame = rows_of(gains, condition, state, quantity).set_index("task").reindex(rows)
         y = positions + offset
-        axis.hlines(y, frame["low"], frame["high"], color=color, lw=1.0, zorder=2)
-        axis.scatter(frame["estimate"], y, s=10, color=color, zorder=3, label=label)
+        interval_marks(axis, frame["estimate"], y, frame["low"], frame["high"], color, size=11)
+        axis.scatter([], [], s=11, color=color, label=label)
     if labelled:  # the panels share the y axis, so the first sets its ticks and the others only hide their labels
         axis.set_yticks(positions)
         axis.set_yticklabels([f"{SHORT_LABELS.get(task, task)} ({sizes[task]:,})" for task in tasks] + ["Mean over tasks"])
@@ -260,18 +270,18 @@ def interval_panel(axis, gains: pd.DataFrame, condition: str, state: str, series
         axis.tick_params(axis="y", labelleft=False)
 
 
-def per_model_figure(gains: pd.DataFrame, state: str, treatment: str, series, xlabel: str, path: Path) -> Path:
+def per_model_figure(gains: pd.DataFrame, state: str, treatment: str, series: Sequence[tuple[str, str, str]], xlabel: str, path: Path) -> Path:
     """One panel per model of `treatment`, tasks by training-set size, the series legend above the panels."""
-    from src.protify.interpretability.figures import INK, _letter, _pyplot, _save
+    from src.protify.interpretability.figures import INK, _letter, _pyplot, _save, _tag
 
     plt = _pyplot()
     columns = model_columns(gains, treatment)
     tasks = task_order(gains)
     sizes = gains[gains["train_size"].notna()].groupby("task")["train_size"].first().astype(int)
-    figure, axes = plt.subplots(1, len(columns), figsize=(1.75 * len(columns) + 1.2, 0.2 * len(tasks) + 1.0), sharey=True, squeeze=False)
-    for index, (axis, (condition, name)) in enumerate(zip(axes[0], columns)):
+    figure, axes = plt.subplots(1, len(columns), figsize=(7.2, 0.17 * len(tasks) + 1.0), sharey=True, squeeze=False)
+    for index, (axis, (condition, name)) in enumerate(zip(axes[0], columns, strict=True)):
         interval_panel(axis, gains, condition, state, series, tasks, sizes, labelled=index == 0)
-        axis.set_title(name, fontsize=7, color=INK)
+        _tag(axis, name)
         _letter(axis, "ABCDEFGH"[index], x=-0.04 if index else -0.55)
     figure.supxlabel(xlabel, fontsize=7, color=INK)
     # the legend sits outside the layout, so it widens no gap between the panels
@@ -283,26 +293,22 @@ def per_model_figure(gains: pd.DataFrame, state: str, treatment: str, series, xl
 
 def draw_pooling_gains(gains: pd.DataFrame, state: str, treatment: str, path: Path) -> Path:
     """Each task's gain of the variance for linear and MLP probes, per model."""
-    from src.protify.interpretability.figures import PALETTE
-
-    series = (("gain_linear", "linear probe", PALETTE[0]), ("gain_mlp", "MLP probe", PALETTE[1]))
+    series = (("gain_linear", "linear probe", PROBE_COLORS["linear"]), ("gain_mlp", "MLP probe", PROBE_COLORS["MLP"]))
     return per_model_figure(gains, state, treatment, series, "score under mean and variance pooling minus under the mean alone", path)
 
 
 def draw_mlp_lead(gains: pd.DataFrame, state: str, treatment: str, path: Path, pooling: str = "mean_var") -> Path:
     """Each task's best MLP score minus its best linear score, AdamW and converged, per model, under `pooling`."""
-    from src.protify.interpretability.figures import PALETTE
-
     solver, name = ("mlp_lead_solver_mean", "the mean alone") if pooling == "mean" else ("mlp_lead_solver", "mean and variance pooling")
-    series = ((f"mlp_lead_{pooling}", "MLP minus AdamW linear", PALETTE[1]), (solver, "MLP minus converged linear", PALETTE[2]))
+    series = ((f"mlp_lead_{pooling}", "MLP minus AdamW linear", PROBE_COLORS["linear"]), (solver, "MLP minus converged linear", GOLD))
     return per_model_figure(gains, state, treatment, series, f"best MLP score minus best linear score, {name}", path)
 
 
-def task_sizes(data: str | None) -> dict[str, int]:
+def task_sizes(concepts_folder: str | None) -> dict[str, int]:
     """Training proteins of every protein task, from the concept datasets (local, or the Hub's)."""
     from src.protify.interpretability.concepts import PROTEIN_TASKS, load_concept
 
-    return {name: len(load_concept(name, local_dir=data).splits["train"].sequences) for name in PROTEIN_TASKS}
+    return {name: len(load_concept(name, local_dir=concepts_folder).splits["train"].sequences) for name in PROTEIN_TASKS}
 
 
 def decision(gains: pd.DataFrame) -> pd.DataFrame:

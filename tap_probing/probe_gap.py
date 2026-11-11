@@ -29,6 +29,7 @@ import pandas as pd
 
 from pathlib import Path
 
+from tap_probing.figure_style import CONTROLS, KIND_COLORS, KIND_TAGS, MODEL_COLORS, PROBE_COLORS, ROW_BAND, interval_marks, row_bands
 from tap_probing.pooling_study import KIND_OF, KINDS, gains_table, rows_of, task_sizes
 
 
@@ -40,7 +41,9 @@ DECOMPOSITION = (("score_linear_mean", "linear, AdamW"), ("score_linear_mean_sol
 LABELS = ("linear", "mlp", "linear_mean", "mlp_mean")  # each a results label and a column of the states table
 VARIANTS = ("bottleneck_mean", "quadratic_mean")  # the decomposition's probes, columns where a condition has them
 STREAM = ("embedding", "resid_post", "final_norm")
-FOCUS = "esmc600_norm"  # the model of the decomposition and the geometry (Logan, 2026-10-18: one model, ESMC-600)
+FOCUS = "esmc600_norm"  # the one model of the decomposition and the geometry, ESMC-600
+CONDITION_COLORS = {condition: MODEL_COLORS.get(model, CONTROLS["random init"].color) for condition, model in CONDITIONS}
+CONDITION_MARKS = {condition: "o" if model in MODEL_COLORS else CONTROLS["random init"].marker for condition, model in CONDITIONS}
 
 
 def state_scores(roots: Path, condition: str, label: str) -> pd.DataFrame:
@@ -53,7 +56,7 @@ def state_scores(roots: Path, condition: str, label: str) -> pd.DataFrame:
     summary = figures.headline(summary)
     summary = summary[summary["family"] == "full"].copy()
     blocks = BLOCKS[condition]
-    summary["depth"] = [figures.depth(site, layer, blocks) for site, layer in zip(summary["site"], summary["layer"])]
+    summary["depth"] = [figures.depth(site, layer, blocks) for site, layer in zip(summary["site"], summary["layer"], strict=True)]
     summary["relative_depth"] = summary["depth"] / (blocks + 1)
     return summary[["task", "site", "layer", "depth", "relative_depth", "full", "validation_score"]].rename(columns={"full": "score"})
 
@@ -124,7 +127,9 @@ def probe_gap_figure(gains: pd.DataFrame, states: pd.DataFrame, path: Path, stat
     (each task's score as a share of its best stream score, averaged over the seven tasks) and composition along
     ESMC-600's residual stream under linear and MLP probes. On the pooled mean: D, InterPro membership along the same
     stream under the linear probe, the MLP without its activation and the MLP."""
-    from src.protify.interpretability.figures import GRID, INK_SECONDARY, PALETTE, _letter, _pyplot, _save
+    from matplotlib.lines import Line2D
+    from matplotlib.ticker import MultipleLocator
+    from src.protify.interpretability.figures import GRID, INK_SECONDARY, _letter, _pyplot, _save
 
     plt = _pyplot()
     has_variants = "bottleneck_mean" in states and states.loc[states["condition"] == FOCUS, "bottleneck_mean"].notna().any()
@@ -133,13 +138,12 @@ def probe_gap_figure(gains: pd.DataFrame, states: pd.DataFrame, path: Path, stat
     if not has_variants:
         axes[3].remove()
     models = [(condition, model) for condition, model in CONDITIONS if (gains["condition"] == condition).any()]
-    model_colors = dict(zip([condition for condition, _ in CONDITIONS], [PALETTE[0], PALETTE[1], PALETTE[2], PALETTE[7]]))
     probes = [(quantity, name) for quantity, name in PROBES if (gains["quantity"] == quantity).any()]
-    colors = {"linear, AdamW": PALETTE[0], "linear, converged": PALETTE[6], "MLP": PALETTE[1]}
+    colors = {"linear, AdamW": PROBE_COLORS["linear"], "linear, converged": PROBE_COLORS["converged"], "MLP": PROBE_COLORS["MLP"]}
     offsets = np.linspace(-0.25, 0.25, len(probes))
     axis = axes[0]
-    for x, (condition, model) in enumerate(models):
-        for offset, (quantity, name) in zip(offsets, probes):
+    for x, (condition, _) in enumerate(models):
+        for offset, (quantity, name) in zip(offsets, probes, strict=True):
             row = rows_of(gains, condition, state, quantity)
             row = row[row["task"] == "mean"]
             if len(row):
@@ -149,40 +153,39 @@ def probe_gap_figure(gains: pd.DataFrame, states: pd.DataFrame, path: Path, stat
     axis.set_xticks(range(len(models)))
     axis.set_xticklabels([model.replace("random-init ESMC-300", "random init") for _, model in models], fontsize=6)
     axis.set_ylabel("mean score")
-    axis.legend(frameon=False, fontsize=5.5, loc="center", ncol=3, handletextpad=0.3, columnspacing=1.0)  # between the trained and random rows
+    top_key = {"frameon": False, "fontsize": 5.5, "loc": "lower center", "bbox_to_anchor": (0.5, 1.0), "handletextpad": 0.3, "columnspacing": 1.0}
+    axis.legend(ncol=3, **top_key)
     axis = axes[1]
     kinds = [kind for kind, _ in KINDS]
-    for index, (condition, model) in enumerate(models):
-        for y, kind in enumerate(kinds):
-            row = rows_of(gains, condition, state, "mlp_lead_solver")
-            row = row[row["task"] == f"kind:{kind}"]
-            if len(row):
-                estimate, low, high = row[["estimate", "low", "high"]].iloc[0]
-                axis.errorbar(estimate, y + (index - (len(models) - 1) / 2) * 0.15, xerr=[[estimate - low], [high - estimate]], fmt="o", ms=3,
-                              color=model_colors[condition], lw=0.8, label=model.replace("random-init ESMC-300", "random init") if y == 0 else None)
-    axis.axvline(0, color=INK_SECONDARY, lw=0.7)
+    row_bands(axis, len(kinds))
+    axis.axvline(0, color=INK_SECONDARY, lw=0.7, zorder=1)
+    for index, (condition, _) in enumerate(models):
+        leads = rows_of(gains, condition, state, "mlp_lead_solver").set_index("task").reindex([f"kind:{kind}" for kind in kinds])
+        rows = np.arange(len(kinds)) + (index - (len(models) - 1) / 2) * 0.2  # (kinds,)
+        interval_marks(axis, leads["estimate"], rows, leads["low"], leads["high"], CONDITION_COLORS[condition], size=12, marker=CONDITION_MARKS[condition])
     axis.set_yticks(range(len(kinds)))
-    axis.set_yticklabels(kinds, fontsize=6)
-    axis.set_ylim(len(kinds) - 0.4, -0.6)
+    axis.set_yticklabels([KIND_TAGS.get(kind, kind) for kind in kinds], fontsize=6, linespacing=0.95)
+    axis.xaxis.set_major_locator(MultipleLocator(0.05))
     axis.set_xlabel("MLP minus converged linear")
-    axis.legend(frameon=False, fontsize=5.5, loc="upper right", ncol=2, handletextpad=0.3, columnspacing=0.8)
+    key = [Line2D([], [], color=CONDITION_COLORS[condition], marker=CONDITION_MARKS[condition], ms=3, ls="none") for condition, _ in models]
+    axis.legend(key,[model.replace("random-init ESMC-300", "random init") for _, model in models], ncol=len(models), **top_key)
     axis = axes[2]
     stream = states[(states["condition"] == FOCUS) & states["site"].isin(STREAM)]
     interpro = stream[stream["kind"] == "InterPro membership"]
     composition = stream[stream["task"] == "prot_param"].sort_values("relative_depth")
-    for column, color, name in (("linear", PALETTE[0], "linear"), ("mlp", PALETTE[1], "MLP")):
+    for column, color, name in (("linear", PROBE_COLORS["linear"], "linear"), ("mlp", PROBE_COLORS["MLP"], "MLP")):
         best = interpro.groupby("task")[column].transform("max")
         profile = (interpro[column] / best).groupby(interpro["relative_depth"]).mean()
         axis.plot(profile.index, profile.values, color=color, lw=1.1, label=f"InterPro, {name}")
-    for column, color, name in (("linear", PALETTE[0], "linear"), ("mlp", PALETTE[1], "MLP")):
+    for column, color, name in (("linear", PROBE_COLORS["linear"], "linear"), ("mlp", PROBE_COLORS["MLP"], "MLP")):
         axis.plot(composition["relative_depth"], composition[column] / composition[column].max(), color=color, ls=":", lw=1.0,
                   label=f"composition, {name}")
     axis.set_ylabel("relative score")
     axis.legend(frameon=False, fontsize=5.5, loc="lower right", ncol=2, handlelength=1.6, columnspacing=0.8)
     if has_variants:
         axis = axes[3]
-        for column, color, name in (("linear_mean", PALETTE[0], "linear"), ("bottleneck_mean", PALETTE[2], "MLP without activation"),
-                                    ("mlp_mean", PALETTE[1], "MLP")):
+        for column, color, name in (("linear_mean", PROBE_COLORS["linear"], "linear"), ("bottleneck_mean", PROBE_COLORS["no activation"], "MLP without activation"),
+                                    ("mlp_mean", PROBE_COLORS["MLP"], "MLP")):
             best = interpro.groupby("task")[column].transform("max")
             profile = (interpro[column] / best).groupby(interpro["relative_depth"]).mean()
             axis.plot(profile.index, profile.values, color=color, lw=1.1, label=name)
@@ -192,8 +195,9 @@ def probe_gap_figure(gains: pd.DataFrame, states: pd.DataFrame, path: Path, stat
     for axis in axes[2:4] if has_variants else axes[2:3]:
         axis.set_xlabel(f"relative depth ({dict(CONDITIONS)[FOCUS]})")
         axis.set_xlim(0, 1)
-    for letter, axis in zip("ABCD", axes if has_variants else axes[:3]):
-        axis.grid(color=GRID, lw=0.5)
+    for letter, axis in zip("ABCD", axes if has_variants else axes[:3], strict=False):
+        axis.grid(axis="x" if axis is axes[1] else "both", color=GRID, lw=0.5)
+        axis.set_axisbelow(True)
         axis.tick_params(labelsize=6)
         _letter(axis, letter)
     figure.tight_layout(w_pad=1.0, h_pad=1.2)
@@ -204,17 +208,21 @@ def decomposition_figure(table: pd.DataFrame, path: Path) -> Path:
     """ESMC-600 on the pooled mean, per group of tasks (all 13, then each kind): each probe's mean score at its chosen
     state with intervals, from the AdamW linear probe through the converged fit, the quadratic probe and the MLP
     without its activation to the MLP, and the neighbor readout."""
-    from src.protify.interpretability.figures import GRID, INK_SECONDARY, PALETTE, _pyplot, _save
+    from src.protify.interpretability.figures import GRID, INK_SECONDARY, _pyplot, _save
 
     plt = _pyplot()
-    colors = {"linear, AdamW": PALETTE[0], "linear, converged": PALETTE[6], "quadratic": PALETTE[3], "MLP without activation": PALETTE[2],
-              "MLP": PALETTE[1], "neighbors": INK_SECONDARY}  # the MLP without activation is a linear map of rank 256 at most
+    colors = {"linear, AdamW": PROBE_COLORS["linear"], "linear, converged": PROBE_COLORS["converged"], "quadratic": PROBE_COLORS["quadratic"],
+              "MLP without activation": PROBE_COLORS["no activation"], "MLP": PROBE_COLORS["MLP"], "neighbors": INK_SECONDARY}  # the MLP without activation is a linear map of rank 256 at most
     groups = [group for group in GROUPS if (table["group"] == group).any()]
     probes = [probe for probe in colors if (table["probe"] == probe).any()]
-    figure, axis = plt.subplots(figsize=(7.2, 2.2))
+    figure, axis = plt.subplots(figsize=(7.2, 2.3))
     offsets = np.linspace(-0.3, 0.3, len(probes))
+    for x in range(0, len(groups), 2):
+        axis.axvspan(x - 0.5, x + 0.5, color=ROW_BAND, lw=0, zorder=0)
+    axis.set_xlim(-0.5, len(groups) - 0.5)
+    axis.tick_params(axis="x", length=0)
     for x, group in enumerate(groups):
-        for offset, probe in zip(offsets, probes):
+        for offset, probe in zip(offsets, probes, strict=True):
             row = table[(table["group"] == group) & (table["probe"] == probe)]
             if not len(row):
                 continue
@@ -225,8 +233,9 @@ def decomposition_figure(table: pd.DataFrame, path: Path) -> Path:
     axis.set_xticks(range(len(groups)))
     axis.set_xticklabels(["all 13 tasks" if group == "mean" else group.removeprefix("kind:") for group in groups], fontsize=6)
     axis.set_ylabel("mean best score, pooled mean")
-    axis.grid(color=GRID, lw=0.5)
-    axis.legend(frameon=False, fontsize=5.5, ncol=3, loc="lower left")
+    axis.grid(axis="y", color=GRID, lw=0.5)
+    axis.set_axisbelow(True)
+    axis.legend(frameon=False, fontsize=5.5, ncol=len(probes), loc="lower center", bbox_to_anchor=(0.5, 1.0), handletextpad=0.3, columnspacing=1.0)
     figure.tight_layout()
     return _save(figure, path)
 
@@ -236,27 +245,30 @@ def geometry_depth_figure(geometry: Path, path: Path) -> Path:
     component's share of variance, anisotropy and the largest coordinate's share of the squared norm. The TwoNN
     dimension stays in `geometry.parquet` only: near-duplicate homologs set the nearest-neighbor ratios it reads."""
     from src.protify.interpretability import figures
-    from src.protify.interpretability.figures import GRID, PALETTE, _pyplot, _save, _tag
+    from src.protify.interpretability.figures import GRID, _letter, _pyplot, _save, _tag
 
     plt = _pyplot()
-    metrics = (("effective_rank", "effective rank"), ("first_component_share", "first component's share"), ("anisotropy", "anisotropy"),
+    metrics =(("effective_rank", "effective rank"), ("first_component_share", "first component's share"), ("anisotropy", "anisotropy"),
                ("top_dimension_share", "largest coordinate's share"))
     figure, axes = plt.subplots(1, len(metrics), figsize=(7.2, 1.9))
-    for index, (condition, model) in enumerate(CONDITIONS):
+    for condition, model in CONDITIONS:
         file = geometry / f"{condition}_s24895" / "geometry.parquet"
         if not file.exists():
             continue
         table = pd.read_parquet(file)
         table = table[table["site"].isin(STREAM)].copy()
-        table["relative_depth"] = [figures.depth(site, layer, BLOCKS[condition]) / (BLOCKS[condition] + 1) for site, layer in zip(table["site"], table["layer"])]
+        table["relative_depth"] = [figures.depth(site, layer, BLOCKS[condition]) / (BLOCKS[condition] + 1) for site, layer in zip(table["site"], table["layer"], strict=True)]
         table = table.sort_values("relative_depth")
-        for axis, (metric, name) in zip(axes, metrics):
-            axis.plot(table["relative_depth"], table[metric], color=PALETTE[[0, 1, 2, 7][index]], lw=1.0, label=model)
+        for axis, (metric, name) in zip(axes, metrics, strict=True):
+            axis.plot(table["relative_depth"], table[metric], color=CONDITION_COLORS[condition], lw=1.0, label=model)
             _tag(axis, name)
-    for axis in axes:
+    for letter, axis in zip("ABCD", axes, strict=True):
         axis.set_xlabel("relative depth")
+        axis.set_xticks([0.0, 0.5, 1.0])
         axis.grid(color=GRID, lw=0.5)
-    axes[0].legend(frameon=False, fontsize=5)
+        _letter(axis, letter, x=-0.02)
+    if len(axes[0].get_lines()) > 1:
+        axes[0].legend(frameon=False, fontsize=5)
     figure.tight_layout(w_pad=0.5)
     return _save(figure, path)
 
@@ -266,41 +278,40 @@ def separation_depth_figure(states: pd.DataFrame, path: Path, condition: str = F
     covariance term (dashed), averaged over the kind's tasks. At every state of the five sites and classification
     task, the MLP's lead over the linear probe on the pooled mean against B, the covariance term's share, and C, the
     neighbor readout's lead over the same linear probe."""
-    from src.protify.interpretability.figures import GRID, INK_SECONDARY, PALETTE, _letter, _pyplot, _save, _tag
+    from src.protify.interpretability.figures import GRID, INK_SECONDARY, _letter, _pyplot, _save, _tag
 
     plt = _pyplot()
-    figure, axes = plt.subplots(1, 3, figsize=(7.2, 2.2))
+    figure, axes = plt.subplots(1, 3, figsize=(7.2, 2.3))
     kinds = [kind for kind, _ in KINDS if kind != "composition"]
     chosen = states[(states["condition"] == condition) & states["bhattacharyya_cov"].notna()]
     stream = chosen[chosen["site"].isin(STREAM)]
-    for index, kind in enumerate(kinds):
+    for kind in kinds:
         terms = stream[stream["kind"] == kind].groupby("relative_depth")[["bhattacharyya_mean", "bhattacharyya_cov"]].mean()
-        axes[0].plot(terms.index, terms["bhattacharyya_mean"], color=PALETTE[[3, 2, 6][index]], lw=1.0, label=f"{kind}, means")
-        axes[0].plot(terms.index, terms["bhattacharyya_cov"], color=PALETTE[[3, 2, 6][index]], lw=1.0, ls="--", label=f"{kind}, covariances")
+        axes[0].plot(terms.index, terms["bhattacharyya_mean"], color=KIND_COLORS[kind], lw=1.0, label=f"{kind}, means")
+        axes[0].plot(terms.index, terms["bhattacharyya_cov"], color=KIND_COLORS[kind], lw=1.0, ls="--", label=f"{kind}, covariances")
         points = chosen[chosen["kind"] == kind]
-        axes[1].scatter(points["covariance_share"], points["mlp_mean"] - points["linear_mean"], s=3, alpha=0.5, color=PALETTE[[3, 2, 6][index]], lw=0,
-                        label=kind)
-        axes[2].scatter(points["knn"] - points["linear_mean"], points["mlp_mean"] - points["linear_mean"], s=3, alpha=0.5, color=PALETTE[[3, 2, 6][index]],
-                        lw=0, label=kind)
+        axes[1].scatter(points["covariance_share"], points["mlp_mean"] - points["linear_mean"], s=3, alpha=0.5, color=KIND_COLORS[kind], lw=0, label=kind)
+        axes[2].scatter(points["knn"] - points["linear_mean"], points["mlp_mean"] - points["linear_mean"], s=3, alpha=0.5, color=KIND_COLORS[kind], lw=0, label=kind)
     _tag(axes[0], dict(CONDITIONS)[condition])
     axes[0].set_xlabel("relative depth")
     axes[0].set_ylabel("Bhattacharyya term")
     axes[0].set_yscale("log")
-    axes[0].set_ylim(top=axes[0].get_ylim()[1] * 8)  # headroom for the line-style key
+    colors = [plt.Line2D([], [], color=KIND_COLORS[kind], lw=0, marker="o", ms=3) for kind in kinds]
     styles = [plt.Line2D([], [], color=INK_SECONDARY, lw=1.0), plt.Line2D([], [], color=INK_SECONDARY, lw=1.0, ls="--")]
-    axes[0].legend(styles, ["mean term", "covariance term"], frameon=False, fontsize=5, ncol=2, loc="upper left")
     axes[1].axhline(0, color=INK_SECONDARY, lw=0.7)
     axes[1].set_xlabel("covariance share of the Bhattacharyya distance")
     axes[1].set_ylabel("MLP minus linear (pooled mean)")
-    axes[1].legend(fontsize=5, loc="upper left", markerscale=2, frameon=True, facecolor="white", edgecolor="none", framealpha=0.9)  # over the points
     axes[2].axhline(0, color=INK_SECONDARY, lw=0.7)
     axes[2].axvline(0, color=INK_SECONDARY, lw=0.7)
     axes[2].set_xlabel("neighbors minus linear")
     axes[2].set_ylabel("MLP minus linear (pooled mean)")
-    for letter, axis in zip("ABC", axes):
+    for letter, axis in zip("ABC", axes, strict=True):
         axis.grid(color=GRID, lw=0.5)
+        axis.set_axisbelow(True)
         _letter(axis, letter)
-    figure.tight_layout(w_pad=1.0)
+    figure.tight_layout(w_pad=1.0, rect=(0, 0, 1, 1 - 0.2 / figure.get_figheight()))
+    figure.legend([*colors, *styles], [*kinds, "mean term", "covariance term"], loc="upper center",
+                  bbox_to_anchor=(0.5, 1.0), ncol=len(kinds) + 2, frameon=False, fontsize=6)
     return _save(figure, path)
 
 

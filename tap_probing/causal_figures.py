@@ -21,6 +21,9 @@ import pandas as pd
 
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
+
+from tap_probing.figure_style import MODEL_COLORS, OTHER_SERIES, STRUCTURE_COLORS
 
 
 MODELS = (("esmc300", "ESMC-300"), ("esmc600", "ESMC-600"), ("esmc6b", "ESMC-6B"))
@@ -35,18 +38,18 @@ def draws_for(proteins: int) -> np.ndarray:
     """Each test protein's count in the whole split and in every shared bootstrap draw: (B + 1, P)."""
     from src.protify.interpretability.scores import protein_draws
 
-    return np.concatenate([np.ones((1, proteins)), protein_draws(proteins).numpy()])
+    return np.concatenate([np.ones((1, proteins)), protein_draws(proteins).numpy()])  # (B + 1, proteins)
 
 
 def ratio(frame: pd.DataFrame, numerator: str, denominator: str, counts: np.ndarray) -> np.ndarray:
     """sum(numerator) / sum(denominator) over the proteins of `frame` (one row per protein, in order), on the whole
     split and every draw: (B + 1,)."""
-    ordered = frame.sort_values("protein")
-    return (counts @ ordered[numerator].to_numpy(np.float64)) / (counts @ ordered[denominator].to_numpy(np.float64))
+    ordered = frame.sort_values("protein")  # counts: (B + 1, proteins)
+    return (counts @ ordered[numerator].to_numpy(np.float64)) / (counts @ ordered[denominator].to_numpy(np.float64))  # (B + 1,)
 
 
 def summarize(draws: np.ndarray) -> dict[str, float]:
-    low, high = np.nanpercentile(draws[1:], [2.5, 97.5])
+    low, high = np.nanpercentile(draws[1:], [2.5, 97.5])  # draws: (B + 1,)
     return {"estimate": float(draws[0]), "low": float(low), "high": float(high)}
 
 
@@ -55,7 +58,8 @@ def seed_folders(runs: Path, stem: str) -> list[Path]:
 
 
 def mean_over_seeds(per_seed: list[np.ndarray]) -> np.ndarray:
-    return np.mean(np.stack(per_seed), axis=0)
+    # per_seed: (B + 1,) per seed
+    return np.mean(np.stack(per_seed), axis=0)  # (B + 1,)
 
 
 # -- tables -------------------------------------------------------------------------------------------------------------
@@ -98,8 +102,8 @@ def ablation_table(runs: Path) -> pd.DataFrame:
         for (block, write, kind), _ in tables[0][tables[0]["block"] >= 0].groupby(["block", "write", "ablation"]):
             parts = [table[(table["block"] == block) & (table["write"] == write) & (table["ablation"] == kind)] for table in tables]
             quantities = {
-                "delta_nll": mean_over_seeds([ratio(part, "nll", "masked", counts) - base for part, base in zip(parts, clean_nll)]),
-                "delta_accuracy": mean_over_seeds([ratio(part, "correct", "masked", counts) - base for part, base in zip(parts, clean_accuracy)]),
+                "delta_nll": mean_over_seeds([ratio(part, "nll", "masked", counts) - base for part, base in zip(parts, clean_nll, strict=True)]),
+                "delta_accuracy": mean_over_seeds([ratio(part, "correct", "masked", counts) - base for part, base in zip(parts, clean_accuracy, strict=True)]),
                 "kl": mean_over_seeds([ratio(part, "kl", "masked", counts) for part in parts]),
             }
             for metric, values in quantities.items():
@@ -132,7 +136,7 @@ def erasure_tables(runs: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
                         mlm_rows.append({"model": model, "concept": name, "depth": int(depth), "relative_depth": depth / (blocks + 1),
                                          "condition": condition, "metric": metric, "seeds": len(parts), **summarize(mean_over_seeds(values[condition][metric]))})
                 for metric in ("kl", "nll"):
-                    difference = mean_over_seeds([a - b for a, b in zip(values["leace"][metric], values["random"][metric])])
+                    difference = mean_over_seeds([a - b for a, b in zip(values["leace"][metric], values["random"][metric], strict=True)])
                     mlm_rows.append({"model": model, "concept": name, "depth": int(depth), "relative_depth": depth / (blocks + 1),
                                      "condition": "leace_minus_random", "metric": metric, "seeds": len(folders), **summarize(difference)})
             readouts = [pd.read_parquet(folder / "readouts.parquet") for folder in folders]
@@ -148,7 +152,7 @@ def erasure_tables(runs: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
 # -- figures ------------------------------------------------------------------------------------------------------------
 
 
-def _band(axis, frame: pd.DataFrame, x: str, color: str, style: str = "-", label: str | None = None, width: float = 1.1) -> None:
+def _band(axis: Any, frame: pd.DataFrame, x: str, color: str, style: str = "-", label: str | None = None, width: float = 1.1) -> None:
     frame = frame.sort_values(x)
     axis.plot(frame[x], frame["estimate"], color=color, ls=style, lw=width, label=label)
     axis.fill_between(frame[x], frame["low"], frame["high"], color=color, alpha=0.15, lw=0)
@@ -158,10 +162,10 @@ def lens_ablation_figure(lens: pd.DataFrame, ablation: pd.DataFrame, path: Path,
     """A, every depth's logit lens (solid) and tuned lens (dashed): masked top-1 accuracy per model. B, the identity
     readout's NLL of each unmasked residue's own token. C, the masked NLL each block's attention (circles) or
     feed-forward write (squares) costs when set to its mean, by the block's relative depth."""
-    from src.protify.interpretability.figures import GRID, INK, INK_SECONDARY, PALETTE, _letter, _pyplot, _save
+    from src.protify.interpretability.figures import GRID, INK, INK_SECONDARY, _letter, _pyplot, _save
 
     plt = _pyplot()
-    colors = {model: PALETTE[index] for index, (_, model) in enumerate(MODELS) if (lens["model"] == model).any()}  # the models drawn
+    colors = {model: MODEL_COLORS[model] for _, model in MODELS if (lens["model"] == model).any()}  # the models drawn
     figure, axes = plt.subplots(1, 3, figsize=(7.2, 2.4))
     masked = lens[(lens["class"] == "all") & (lens["metric"] == "accuracy")]
     for model, color in colors.items():
@@ -184,7 +188,7 @@ def lens_ablation_figure(lens: pd.DataFrame, ablation: pd.DataFrame, path: Path,
     axes[1].set_ylabel("identity readout loss (nats)")
     axes[1].set_yscale("log")
     axes[2].set_ylabel("loss increase (nats)")
-    for letter, axis in zip("ABC", axes):
+    for letter, axis in zip("ABC", axes, strict=True):
         axis.set_xlabel("relative depth")
         axis.set_xlim(0, 1.0)
         axis.grid(color=GRID, lw=0.5)
@@ -213,10 +217,10 @@ def erasure_figure(mlm: pd.DataFrame, readouts: pd.DataFrame, path: Path) -> Pat
     """Per concept (columns): A, KL from the unerased prediction per masked residue after LEACE erasure (solid) and
     after a random subspace of the same rank (dashed) at each relative depth; B, the concept's linear readability at
     the final norm after erasure at each depth (solid LEACE, dashed random), against the unerased stream (dotted)."""
-    from src.protify.interpretability.figures import GRID, INK, PALETTE, _letter, _pyplot, _save, _tag
+    from src.protify.interpretability.figures import GRID, INK, _letter, _pyplot, _save, _tag
 
     plt = _pyplot()
-    colors = {model: PALETTE[index] for index, (_, model) in enumerate(MODELS) if (mlm["model"] == model).any()}  # the models drawn
+    colors = {model: MODEL_COLORS[model] for _, model in MODELS if (mlm["model"] == model).any()}  # the models drawn
     concepts = [name for _, name in CONCEPTS if name in set(mlm["concept"])]
     figure, axes = plt.subplots(2, len(concepts), figsize=(7.2, 3.6), squeeze=False)
     for column, concept in enumerate(concepts):
@@ -260,36 +264,38 @@ def lens_by_structure_figure(lens: pd.DataFrame, path: Path, names: Sequence[str
     The benchmark gives no integer order for its classes; `names` follows their frequencies among masked residues
     (35, 21 and 44% for classes 0, 1 and 2, as for helix, strand and coil).
     """
-    from src.protify.interpretability.figures import GRID, PALETTE, _pyplot, _save, _tag
+    from src.protify.interpretability.figures import GRID, _pyplot, _save, _tag
 
     plt = _pyplot()
     models = [model for _, model in MODELS if (lens["model"] == model).any()]
     classes = [kind for kind in lens["class"].unique() if kind != "all"]
-    figure, axes = plt.subplots(1, len(models), figsize=(7.2, 2.1), sharey=True, squeeze=False)
-    for axis, model in zip(axes[0], models):
+    figure, axes = plt.subplots(1, len(models), figsize=(7.2, 1.46), sharey=True, squeeze=False)
+    for axis, model in zip(axes[0], models, strict=True):
         for index, kind in enumerate(classes):
             frame = lens[(lens["model"] == model) & (lens["lens"] == "logit") & (lens["class"] == kind) & (lens["metric"] == "accuracy")]
-            _band(axis, frame, "relative_depth", PALETTE[index], label=names[index] if index < len(names) else kind)
-        _tag(axis, model)
+            name = names[index] if index < len(names) else kind
+            _band(axis, frame, "relative_depth", STRUCTURE_COLORS.get(name, OTHER_SERIES[index]), label=name)
+        if len(models) > 1:  # a single panel is named by the caption
+            _tag(axis, model)
         axis.set_xlabel("relative depth")
         axis.grid(color=GRID, lw=0.5)
-    axes[0][0].set_ylabel("masked accuracy, logit lens")
-    axes[0][0].legend(frameon=False, fontsize=5.5)
+    axes[0][0].set_ylabel("masked accuracy")
+    axes[0][0].legend(frameon=False, fontsize=5.5, loc="upper left", ncol=len(classes), handlelength=1.6, columnspacing=1.0)
     figure.tight_layout(w_pad=0.6)
     return _save(figure, path)
 
 
 def ablation_zero_figure(ablation: pd.DataFrame, path: Path) -> Path:
     """Zero against mean ablation of every write: the masked NLL cost per model."""
-    from src.protify.interpretability.figures import GRID, PALETTE, _pyplot, _save, _tag
+    from src.protify.interpretability.figures import GRID, _pyplot, _save, _tag
 
     plt = _pyplot()
     models = [model for _, model in MODELS if (ablation["model"] == model).any()]
     figure, axes = plt.subplots(1, len(models), figsize=(7.2, 2.1), sharey=True, squeeze=False)
-    for axis, model in zip(axes[0], models):
+    for axis, model in zip(axes[0], models, strict=True):
         for index, (write, kind) in enumerate((("attn", "mean"), ("attn", "zero"), ("ffn", "mean"), ("ffn", "zero"))):
             frame = ablation[(ablation["model"] == model) & (ablation["write"] == write) & (ablation["ablation"] == kind) & (ablation["metric"] == "delta_nll")]
-            _band(axis, frame, "relative_depth", PALETTE[index], label=f"{'attention' if write == 'attn' else 'feed-forward'}, {kind}", width=0.9)
+            _band(axis, frame, "relative_depth", OTHER_SERIES[index], label=f"{'attention' if write == 'attn' else 'feed-forward'}, {kind}", width=0.9)
         _tag(axis, model)
         axis.set_xlabel("relative depth")
         axis.grid(color=GRID, lw=0.5)
@@ -299,18 +305,18 @@ def ablation_zero_figure(ablation: pd.DataFrame, path: Path) -> Path:
     return _save(figure, path)
 
 
-def unigram_accuracy(data: str | None) -> float:
+def unigram_accuracy(concepts_dir: str | None) -> float:
     """The share of the lens task's test residues that are its most frequent residue: the accuracy of always
     predicting it, the masked prediction's floor."""
     from collections import Counter
     from src.protify.interpretability.causal import LENS_TASK
     from src.protify.interpretability.concepts import load_concept
 
-    residues = Counter("".join(load_concept(LENS_TASK, local_dir=data).splits["test"].sequences))
+    residues = Counter("".join(load_concept(LENS_TASK, local_dir=concepts_dir).splits["test"].sequences))
     return max(residues.values()) / sum(residues.values())
 
 
-def write_all(runs: Path, out: Path, data: str | None = None) -> list[Path]:
+def write_all(runs: Path, out: Path, concepts_dir: str | None = None) -> list[Path]:
     out.mkdir(parents=True, exist_ok=True)
     lens, ablation = lens_table(runs), ablation_table(runs)
     mlm, readouts = erasure_tables(runs)
@@ -318,7 +324,7 @@ def write_all(runs: Path, out: Path, data: str | None = None) -> list[Path]:
     for name, table in (("lens", lens), ("ablation", ablation), ("erasure_mlm", mlm), ("erasure_readouts", readouts)):
         table.to_csv(out / f"{name}.csv", index=False, float_format="%.5f")
         written.append(out / f"{name}.csv")
-    written.append(lens_ablation_figure(lens, ablation, out / "lens_ablation.png", unigram_accuracy(data)))
+    written.append(lens_ablation_figure(lens, ablation, out / "lens_ablation.png", unigram_accuracy(concepts_dir)))
     written.append(erasure_figure(mlm, readouts, out / "erasure.png"))
     written.append(lens_by_structure_figure(lens, out / "lens_by_structure.png"))
     written.append(ablation_zero_figure(ablation, out / "ablation_zero.png"))

@@ -1,0 +1,759 @@
+{
+  "schema": "embedding_profile_schema_v1",
+  "id": "embedding_profile_v1",
+  "status": "qualified",
+  "function": {
+    "precision_mode": {
+      "esmc_small": "fp16_backbone",
+      "esmc_large": "fp16_backbone",
+      "esmc_6b": "bf16_backbone",
+      "esmc_small_random": "fp16_backbone"
+    },
+    "attention_backend": "efficient_attention",
+    "numerics": {
+      "preferred_blas_library": "cublaslt",
+      "bf16_reduced_precision_reduction": false,
+      "bf16_reduced_precision_reduction_split_k": false,
+      "fp16_reduced_precision_reduction": false,
+      "fp16_reduced_precision_reduction_split_k": false,
+      "fp16_accumulation": false,
+      "fp32_precision": "ieee",
+      "matmul_fp32_precision": "ieee",
+      "cudnn_fp32_precision": "ieee",
+      "cudnn_conv_fp32_precision": "ieee",
+      "cudnn_rnn_fp32_precision": "ieee",
+      "deterministic_algorithms": true,
+      "deterministic_warn_only": false,
+      "fill_uninitialized_memory": true,
+      "cudnn_deterministic": true,
+      "cudnn_benchmark": false,
+      "cublas_workspace_bytes": 33554432,
+      "cublaslt_workspace_bytes": 1048576,
+      "fp16_bf16_reduction_math_sdp": false,
+      "autocast": false
+    },
+    "environment_variables": {
+      "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
+      "EMBEDDING_PROFILE": "embedding_profile_v1",
+      "NVIDIA_TF32_OVERRIDE": "0",
+      "PYTHONHASHSEED": "0",
+      "TORCH_BLAS_PREFER_CUBLASLT": "1"
+    },
+    "environments": {
+      "linux/aarch64": "8aa7b9c4fcff30077e1fe2f12f3c61f80da3c1948ce511c114f70f9acfa814e2",
+      "linux/x86_64": "011c06bc17f1e5aaeeeb28012a0235d24b3abd1de96215e6c8f8a1d01905fded"
+    },
+    "geometry": {
+      "esmc_small": {
+        "bucket_tokens": 64,
+        "token_budget": 32768,
+        "max_rows": 256,
+        "sae_chunk_rows": 1024
+      },
+      "esmc_large": {
+        "bucket_tokens": 64,
+        "token_budget": 32768,
+        "max_rows": 256,
+        "sae_chunk_rows": 1024
+      },
+      "esmc_6b": {
+        "bucket_tokens": 64,
+        "token_budget": 32768,
+        "max_rows": 256,
+        "sae_chunk_rows": 1024
+      },
+      "esmc_small_random": {
+        "bucket_tokens": 64,
+        "token_budget": 32768,
+        "max_rows": 256,
+        "sae_chunk_rows": 1024
+      }
+    },
+    "readout": {
+      "name": "sae_topk_v2",
+      "rho": 0.1
+    }
+  },
+  "classes": {
+    "hopper_sm90_132": {
+      "device_type": "cuda",
+      "compute_capability": [
+        9,
+        0
+      ],
+      "multiprocessors": 132,
+      "tier": 1,
+      "reference": true,
+      "bases": [
+        "esmc_small",
+        "esmc_large",
+        "esmc_6b"
+      ],
+      "members": [
+        "NVIDIA GH200 480GB",
+        "NVIDIA H100 80GB HBM3",
+        "NVIDIA H100 NVL",
+        "NVIDIA H200"
+      ]
+    },
+    "ampere_sm80_108": {
+      "device_type": "cuda",
+      "compute_capability": [
+        8,
+        0
+      ],
+      "multiprocessors": 108,
+      "tier": 2,
+      "reference": false,
+      "bases": [
+        "esmc_small",
+        "esmc_large"
+      ],
+      "members": [
+        "NVIDIA A100 80GB PCIe",
+        "NVIDIA A100-SXM4-40GB",
+        "NVIDIA A100-SXM4-80GB"
+      ]
+    },
+    "ampere_sm86_80": {
+      "device_type": "cuda",
+      "compute_capability": [
+        8,
+        6
+      ],
+      "multiprocessors": 80,
+      "tier": 2,
+      "reference": false,
+      "bases": [
+        "esmc_small",
+        "esmc_large"
+      ],
+      "members": [
+        "NVIDIA A10G"
+      ]
+    },
+    "ampere_sm86_72": {
+      "device_type": "cuda",
+      "compute_capability": [
+        8,
+        6
+      ],
+      "multiprocessors": 72,
+      "tier": 2,
+      "reference": false,
+      "bases": [
+        "esmc_small",
+        "esmc_large"
+      ],
+      "members": [
+        "NVIDIA A10"
+      ]
+    },
+    "ada_sm89_142": {
+      "device_type": "cuda",
+      "compute_capability": [
+        8,
+        9
+      ],
+      "multiprocessors": 142,
+      "tier": 2,
+      "reference": false,
+      "bases": [
+        "esmc_small",
+        "esmc_large"
+      ],
+      "members": [
+        "NVIDIA L40S"
+      ]
+    },
+    "ada_sm89_58": {
+      "device_type": "cuda",
+      "compute_capability": [
+        8,
+        9
+      ],
+      "multiprocessors": 58,
+      "tier": 2,
+      "reference": false,
+      "bases": [
+        "esmc_small",
+        "esmc_large"
+      ],
+      "members": [
+        "NVIDIA L4"
+      ]
+    }
+  },
+  "canary": {
+    "golden": {
+      "hopper_sm90_132": {
+        "esmc_small": {
+          "final_hidden": "e6e08d13d0e77a4d7ee3df6c1affb01610c86707c677179df738e59bd3e2ec95",
+          "final_mean_var": "8e8c147390816d70db0e1308c4ca2829df3eb7b9f245d978295aa28e048ede22",
+          "layer_hidden": "84d0ab1531772d4e0d827923a8fb06a68b2947214e967c8e56eadef2a359d804",
+          "sae_codes": "241004fa0258d81fec0d2abde9d6018532bf0e0bc28dac9e5fa5988ac938e2ed",
+          "sae_max": "d65dc07141d2ac86beaceeeff399e0f3d8ff259f2e7bf86eba3f932a13e9c67e",
+          "structural": "3c11710deabcc1a1b7e92b1b195db24ac9e67c85250a7bbd7cc8422c707bbe46"
+        },
+        "esmc_large": {
+          "final_hidden": "451f8e194771b6c229cab67a1ac83bf97b420af864f5e7b4d7689725580228fe",
+          "final_mean_var": "b897ab0030205473ca96b69f7b953ef91b821a9b0df6cf96cf599f3c85e9ccc5",
+          "layer_hidden": "e668b6cf7df233ef8322bf9634d7e7382d19a14555d316260b4d003a68e88937",
+          "sae_codes": "e27928d9d3ab9f59c446a190075e768e43a8d9c908ea9c46395e05e158fc56c4",
+          "sae_max": "4ced3808088919575455a4a4b5c2c2132a546ff6dcc8f2ac8db33227b8690558",
+          "structural": "cdd14a66f0ca0883e1679c4d5bb67a9af9b72a25117edc377232890e4a255603"
+        },
+        "esmc_6b": {
+          "final_hidden": "f8f9f28a871d488c42f2460f1cc0368f212d2ba047cb8e24a14f547b11e44a8e",
+          "final_mean_var": "3f5bfe4ae90282c51d441e8f42d15295e5cb8f3aaebc82c7116257b291caf11c",
+          "layer_hidden": "b7c46aa2ed3e37b8775e825efb15e1c85a75c7757476f3a0fc1ff6bfa3463f7a",
+          "sae_codes": "d2b9be6a87e915c670f9daa7363e87456d0c53ba982347740805738e8218b23a",
+          "sae_max": "dc52e7d04625ba12395e51d32208d078adf1f4a601b195a0bbe46a4ed88e74d2",
+          "structural": "71ff35da18d719ddf024ef33b6ef93c7cce768b5c132d8650b4a4a32e7d5eb6d"
+        }
+      },
+      "ampere_sm80_108": {
+        "esmc_small": {
+          "final_hidden": "574546b8207419a75b2b06dc2247a129b07531dfaa6bf62486eea305d907aad1",
+          "final_mean_var": "d74c3ee76c5ba581d8526400953ccfc2834bcb26c23bd7d478524fb66746b406",
+          "layer_hidden": "93a0d5dc6afc22eb93fbe277bff0c0005ce0dd37aa13b17e1fe2e4df091eb1b8",
+          "sae_codes": "b0f02ca07967d3f51e2d81cbd49f5d59867fb06795597d25b480b54b8e9bb447",
+          "sae_max": "e7a234d2465dbcc1eebdb10885e822d5657f3213defbf0a04b9ed38595d3b18d",
+          "structural": "1b79e52d687f373aa1b06a8f420f65469095facfae6dcce42c908bae6ebe7eef"
+        },
+        "esmc_large": {
+          "final_hidden": "026a9fe1842f1e2b81f63a473a9a869fcfe4c2f5cd0e29f99a917ef731a831cd",
+          "final_mean_var": "d8ea035e150cc144b31251e322cdbb4f9f263c10214ec83b566301e1481f05e6",
+          "layer_hidden": "8b6772ec99b686584b084ac17340d87dddaae06e0e699f7d31cf064789818eb8",
+          "sae_codes": "ad4f217732572919144d1dd513ea7725ded9e6b4629aea2ec60db765cc110ee6",
+          "sae_max": "b9696a15aa736b7a681a11817308fce052c34493746a27540f26d1a4e471e8ac",
+          "structural": "3981565c64f6d946a822969c9f7f705de6e6d692c1b57b4a16eb69b6cecbb4fd"
+        }
+      },
+      "ampere_sm86_72": {
+        "esmc_small": {
+          "final_hidden": "574546b8207419a75b2b06dc2247a129b07531dfaa6bf62486eea305d907aad1",
+          "final_mean_var": "93530346d0b96f51c706fd925c876331d96c15d5948ffef4ce464db37dd5fd39",
+          "layer_hidden": "93a0d5dc6afc22eb93fbe277bff0c0005ce0dd37aa13b17e1fe2e4df091eb1b8",
+          "sae_codes": "b0f02ca07967d3f51e2d81cbd49f5d59867fb06795597d25b480b54b8e9bb447",
+          "sae_max": "e7a234d2465dbcc1eebdb10885e822d5657f3213defbf0a04b9ed38595d3b18d",
+          "structural": "1b79e52d687f373aa1b06a8f420f65469095facfae6dcce42c908bae6ebe7eef"
+        },
+        "esmc_large": {
+          "final_hidden": "026a9fe1842f1e2b81f63a473a9a869fcfe4c2f5cd0e29f99a917ef731a831cd",
+          "final_mean_var": "3d369135f5f24feed119f777fd837c0bee42ba534f43d246fd0eba86be2a1e65",
+          "layer_hidden": "8b6772ec99b686584b084ac17340d87dddaae06e0e699f7d31cf064789818eb8",
+          "sae_codes": "3d56d80328b3b8ed2ac06a9424c14e8e7bc31919f58432247d6a6c553df46354",
+          "sae_max": "d1129e25cdce3862e4d3248c134a1092ab481f3a5aceec538375e6dfacaf1f43",
+          "structural": "3981565c64f6d946a822969c9f7f705de6e6d692c1b57b4a16eb69b6cecbb4fd"
+        }
+      },
+      "ampere_sm86_80": {
+        "esmc_small": {
+          "final_hidden": "574546b8207419a75b2b06dc2247a129b07531dfaa6bf62486eea305d907aad1",
+          "final_mean_var": "58b3b41e15866d63371d2b6692aa2d4fd06db3b86e6c279cbb2a5734e87edaad",
+          "layer_hidden": "93a0d5dc6afc22eb93fbe277bff0c0005ce0dd37aa13b17e1fe2e4df091eb1b8",
+          "sae_codes": "b0f02ca07967d3f51e2d81cbd49f5d59867fb06795597d25b480b54b8e9bb447",
+          "sae_max": "e7a234d2465dbcc1eebdb10885e822d5657f3213defbf0a04b9ed38595d3b18d",
+          "structural": "1b79e52d687f373aa1b06a8f420f65469095facfae6dcce42c908bae6ebe7eef"
+        },
+        "esmc_large": {
+          "final_hidden": "026a9fe1842f1e2b81f63a473a9a869fcfe4c2f5cd0e29f99a917ef731a831cd",
+          "final_mean_var": "17854dd0bd9b2aaec947b5b5bed90da950d6dca58d504cea6bb89334acfe54ac",
+          "layer_hidden": "8b6772ec99b686584b084ac17340d87dddaae06e0e699f7d31cf064789818eb8",
+          "sae_codes": "ad4f217732572919144d1dd513ea7725ded9e6b4629aea2ec60db765cc110ee6",
+          "sae_max": "b9696a15aa736b7a681a11817308fce052c34493746a27540f26d1a4e471e8ac",
+          "structural": "3981565c64f6d946a822969c9f7f705de6e6d692c1b57b4a16eb69b6cecbb4fd"
+        }
+      },
+      "ada_sm89_58": {
+        "esmc_small": {
+          "final_hidden": "574546b8207419a75b2b06dc2247a129b07531dfaa6bf62486eea305d907aad1",
+          "final_mean_var": "5162c62e7a8cb8d4f533488aa919ecd4619df70e3133eb066928b87d803c8b82",
+          "layer_hidden": "93a0d5dc6afc22eb93fbe277bff0c0005ce0dd37aa13b17e1fe2e4df091eb1b8",
+          "sae_codes": "b0f02ca07967d3f51e2d81cbd49f5d59867fb06795597d25b480b54b8e9bb447",
+          "sae_max": "e7a234d2465dbcc1eebdb10885e822d5657f3213defbf0a04b9ed38595d3b18d",
+          "structural": "562034fbcf7852b55374b108462fd135cf9d137aab086354743349732cc94c73"
+        },
+        "esmc_large": {
+          "final_hidden": "026a9fe1842f1e2b81f63a473a9a869fcfe4c2f5cd0e29f99a917ef731a831cd",
+          "final_mean_var": "c962320fc7e82a6f203f65b5e77066b6001f7d13b91f0a79819fc941bdf63baf",
+          "layer_hidden": "8b6772ec99b686584b084ac17340d87dddaae06e0e699f7d31cf064789818eb8",
+          "sae_codes": "ad4f217732572919144d1dd513ea7725ded9e6b4629aea2ec60db765cc110ee6",
+          "sae_max": "b9696a15aa736b7a681a11817308fce052c34493746a27540f26d1a4e471e8ac",
+          "structural": "6f3403b002f4fe6c9b7e0a00304a356548b86991de143d1d8b03562f76059984"
+        }
+      },
+      "ada_sm89_142": {
+        "esmc_small": {
+          "final_hidden": "574546b8207419a75b2b06dc2247a129b07531dfaa6bf62486eea305d907aad1",
+          "final_mean_var": "b08da0afc8eac990d291c5ff2d9b355177070efde8e71daefef4d49413f69897",
+          "layer_hidden": "93a0d5dc6afc22eb93fbe277bff0c0005ce0dd37aa13b17e1fe2e4df091eb1b8",
+          "sae_codes": "b0f02ca07967d3f51e2d81cbd49f5d59867fb06795597d25b480b54b8e9bb447",
+          "sae_max": "e7a234d2465dbcc1eebdb10885e822d5657f3213defbf0a04b9ed38595d3b18d",
+          "structural": "2ac5fdcc5041e6d9a06230f7adcc1d276a8224d9aa9883f9bc5fbfb1381b465b"
+        },
+        "esmc_large": {
+          "final_hidden": "026a9fe1842f1e2b81f63a473a9a869fcfe4c2f5cd0e29f99a917ef731a831cd",
+          "final_mean_var": "f43c3a616c3330b94bec8a7d35c79c4cc2156ac921f15703c84165c282860b28",
+          "layer_hidden": "8b6772ec99b686584b084ac17340d87dddaae06e0e699f7d31cf064789818eb8",
+          "sae_codes": "ad4f217732572919144d1dd513ea7725ded9e6b4629aea2ec60db765cc110ee6",
+          "sae_max": "b9696a15aa736b7a681a11817308fce052c34493746a27540f26d1a4e471e8ac",
+          "structural": "6f3403b002f4fe6c9b7e0a00304a356548b86991de143d1d8b03562f76059984"
+        }
+      }
+    },
+    "bounds": {
+      "ampere_sm86_72": {
+        "esmc_small": {
+          "final_hidden": {
+            "relative_l2_max": 0.002091032452881336,
+            "relative_l2_median": 0.0017917272634804249,
+            "row_bf16_steps_max": 32.0,
+            "row_bf16_steps_p999": 2.0,
+            "share_above_one_row_step": 0.003063040068655303
+          },
+          "final_mean_var": {
+            "relative_l2_max": 0.010394862852990627,
+            "relative_l2_median": 0.0002945841115433723,
+            "row_bf16_steps_max": 31.318115234375,
+            "row_bf16_steps_p999": 1.1441335678100586,
+            "share_above_one_row_step": 0.0012629988757729062
+          },
+          "layer_hidden": {
+            "relative_l2_max": 0.002582404762506485,
+            "relative_l2_median": 0.002243828261271119,
+            "row_bf16_steps_max": 32.0,
+            "row_bf16_steps_p999": 2.0,
+            "share_above_one_row_step": 0.008590081725457702
+          },
+          "sae_codes": {
+            "jaccard_mean": 0.9958831929640534,
+            "jaccard_min": 0.939393937587738,
+            "relative_l2_max": 0.007698777399461938,
+            "relative_l2_median": 0.0008898000979250417,
+            "share_identical_codes": 0.8669211647727273
+          },
+          "sae_max": {
+            "jaccard_mean": 0.9910681798740535,
+            "jaccard_min": 0.8908930928288605,
+            "relative_l2_max": 0.08288066770969603,
+            "relative_l2_median": 0.0019816205170775122,
+            "share_identical_codes": 0.00955593029792018
+          },
+          "structural": {
+            "relative_l2_max": 0.0028251789044588804,
+            "relative_l2_median": 0.0018875481327995658,
+            "row_bf16_steps_max": 14.25,
+            "row_bf16_steps_p999": 1.75,
+            "share_above_one_row_step": 0.011407794374408144
+          }
+        },
+        "esmc_large": {
+          "final_hidden": {
+            "relative_l2_max": 0.004257372114807367,
+            "relative_l2_median": 0.0019334802636876702,
+            "row_bf16_steps_max": 64.0,
+            "row_bf16_steps_p999": 3.5,
+            "share_above_one_row_step": 0.006753760957557344
+          },
+          "final_mean_var": {
+            "relative_l2_max": 0.01696462370455265,
+            "relative_l2_median": 0.0003293815243523568,
+            "row_bf16_steps_max": 65.61767578125,
+            "row_bf16_steps_p999": 1.3871593475341797,
+            "share_above_one_row_step": 0.0018985970582724378
+          },
+          "layer_hidden": {
+            "relative_l2_max": 0.009937752038240433,
+            "relative_l2_median": 0.0019539452623575926,
+            "row_bf16_steps_max": 96.0,
+            "row_bf16_steps_p999": 4.0,
+            "share_above_one_row_step": 0.006549745296388363
+          },
+          "sae_codes": {
+            "jaccard_mean": 0.9956180981155767,
+            "jaccard_min": 0.8550724387168884,
+            "relative_l2_max": 0.03367199355534501,
+            "relative_l2_median": 0.0007451021219332114,
+            "share_identical_codes": 0.8634883996212122
+          },
+          "sae_max": {
+            "jaccard_mean": 0.9918226329846426,
+            "jaccard_min": 0.8585005279831045,
+            "relative_l2_max": 0.09177533903795755,
+            "relative_l2_median": 0.001802264128944142,
+            "share_identical_codes": 0.028105677346824058
+          },
+          "structural": {
+            "relative_l2_max": 0.008266281336545944,
+            "relative_l2_median": 0.0019621143583208323,
+            "row_bf16_steps_max": 33.59375,
+            "row_bf16_steps_p999": 4.25,
+            "share_above_one_row_step": 0.020966154156309185
+          }
+        }
+      },
+      "ampere_sm80_108": {
+        "esmc_small": {
+          "final_hidden": {
+            "relative_l2_max": 0.002091032452881336,
+            "relative_l2_median": 0.0017917272634804249,
+            "row_bf16_steps_max": 32.0,
+            "row_bf16_steps_p999": 2.0,
+            "share_above_one_row_step": 0.003063040068655303
+          },
+          "final_mean_var": {
+            "relative_l2_max": 0.010394862852990627,
+            "relative_l2_median": 0.0002945841115433723,
+            "row_bf16_steps_max": 31.318115234375,
+            "row_bf16_steps_p999": 1.1441335678100586,
+            "share_above_one_row_step": 0.0012629988757729062
+          },
+          "layer_hidden": {
+            "relative_l2_max": 0.002582404762506485,
+            "relative_l2_median": 0.002243828261271119,
+            "row_bf16_steps_max": 32.0,
+            "row_bf16_steps_p999": 2.0,
+            "share_above_one_row_step": 0.008590081725457702
+          },
+          "sae_codes": {
+            "jaccard_mean": 0.9958831929640534,
+            "jaccard_min": 0.939393937587738,
+            "relative_l2_max": 0.007698777399461938,
+            "relative_l2_median": 0.0008898000979250417,
+            "share_identical_codes": 0.8669211647727273
+          },
+          "sae_max": {
+            "jaccard_mean": 0.9910681798740535,
+            "jaccard_min": 0.8908930928288605,
+            "relative_l2_max": 0.08288066770969603,
+            "relative_l2_median": 0.0019816205170775122,
+            "share_identical_codes": 0.00955593029792018
+          },
+          "structural": {
+            "relative_l2_max": 0.0028251789044588804,
+            "relative_l2_median": 0.0018875481327995658,
+            "row_bf16_steps_max": 14.25,
+            "row_bf16_steps_p999": 1.75,
+            "share_above_one_row_step": 0.011407794374408144
+          }
+        },
+        "esmc_large": {
+          "final_hidden": {
+            "relative_l2_max": 0.004257372114807367,
+            "relative_l2_median": 0.0019334802636876702,
+            "row_bf16_steps_max": 64.0,
+            "row_bf16_steps_p999": 3.5,
+            "share_above_one_row_step": 0.006753760957557344
+          },
+          "final_mean_var": {
+            "relative_l2_max": 0.01696462370455265,
+            "relative_l2_median": 0.0003293815243523568,
+            "row_bf16_steps_max": 65.61767578125,
+            "row_bf16_steps_p999": 1.3871593475341797,
+            "share_above_one_row_step": 0.0018985970582724378
+          },
+          "layer_hidden": {
+            "relative_l2_max": 0.009937752038240433,
+            "relative_l2_median": 0.0019539452623575926,
+            "row_bf16_steps_max": 96.0,
+            "row_bf16_steps_p999": 4.0,
+            "share_above_one_row_step": 0.006549745296388363
+          },
+          "sae_codes": {
+            "jaccard_mean": 0.9956180838882133,
+            "jaccard_min": 0.8550724387168884,
+            "relative_l2_max": 0.033671955669301624,
+            "relative_l2_median": 0.0007450657662193785,
+            "share_identical_codes": 0.8634588068181818
+          },
+          "sae_max": {
+            "jaccard_mean": 0.9918231900263171,
+            "jaccard_min": 0.8585005279831045,
+            "relative_l2_max": 0.09177529470640926,
+            "relative_l2_median": 0.0018022633488675775,
+            "share_identical_codes": 0.028105677346824058
+          },
+          "structural": {
+            "relative_l2_max": 0.008266281336545944,
+            "relative_l2_median": 0.0019621143583208323,
+            "row_bf16_steps_max": 33.59375,
+            "row_bf16_steps_p999": 4.25,
+            "share_above_one_row_step": 0.020966154156309185
+          }
+        }
+      },
+      "ampere_sm86_80": {
+        "esmc_small": {
+          "final_hidden": {
+            "relative_l2_max": 0.002091032452881336,
+            "relative_l2_median": 0.0017917272634804249,
+            "row_bf16_steps_max": 32.0,
+            "row_bf16_steps_p999": 2.0,
+            "share_above_one_row_step": 0.003063040068655303
+          },
+          "final_mean_var": {
+            "relative_l2_max": 0.010394862852990627,
+            "relative_l2_median": 0.0002945841115433723,
+            "row_bf16_steps_max": 31.318115234375,
+            "row_bf16_steps_p999": 1.1441335678100586,
+            "share_above_one_row_step": 0.0012629988757729062
+          },
+          "layer_hidden": {
+            "relative_l2_max": 0.002582404762506485,
+            "relative_l2_median": 0.002243828261271119,
+            "row_bf16_steps_max": 32.0,
+            "row_bf16_steps_p999": 2.0,
+            "share_above_one_row_step": 0.008590081725457702
+          },
+          "sae_codes": {
+            "jaccard_mean": 0.9958831929640534,
+            "jaccard_min": 0.939393937587738,
+            "relative_l2_max": 0.007698777399461938,
+            "relative_l2_median": 0.0008898000979250417,
+            "share_identical_codes": 0.8669211647727273
+          },
+          "sae_max": {
+            "jaccard_mean": 0.9910681798740535,
+            "jaccard_min": 0.8908930928288605,
+            "relative_l2_max": 0.08288066770969603,
+            "relative_l2_median": 0.0019816205170775122,
+            "share_identical_codes": 0.00955593029792018
+          },
+          "structural": {
+            "relative_l2_max": 0.0028251789044588804,
+            "relative_l2_median": 0.0018875481327995658,
+            "row_bf16_steps_max": 14.25,
+            "row_bf16_steps_p999": 1.75,
+            "share_above_one_row_step": 0.011407794374408144
+          }
+        },
+        "esmc_large": {
+          "final_hidden": {
+            "relative_l2_max": 0.004257372114807367,
+            "relative_l2_median": 0.0019334802636876702,
+            "row_bf16_steps_max": 64.0,
+            "row_bf16_steps_p999": 3.5,
+            "share_above_one_row_step": 0.006753760957557344
+          },
+          "final_mean_var": {
+            "relative_l2_max": 0.01696462370455265,
+            "relative_l2_median": 0.0003293815243523568,
+            "row_bf16_steps_max": 65.61767578125,
+            "row_bf16_steps_p999": 1.3871593475341797,
+            "share_above_one_row_step": 0.0018985970582724378
+          },
+          "layer_hidden": {
+            "relative_l2_max": 0.009937752038240433,
+            "relative_l2_median": 0.0019539452623575926,
+            "row_bf16_steps_max": 96.0,
+            "row_bf16_steps_p999": 4.0,
+            "share_above_one_row_step": 0.006549745296388363
+          },
+          "sae_codes": {
+            "jaccard_mean": 0.9956180838882133,
+            "jaccard_min": 0.8550724387168884,
+            "relative_l2_max": 0.033671955669301624,
+            "relative_l2_median": 0.0007450657662193785,
+            "share_identical_codes": 0.8634588068181818
+          },
+          "sae_max": {
+            "jaccard_mean": 0.9918231900263171,
+            "jaccard_min": 0.8585005279831045,
+            "relative_l2_max": 0.09177529470640926,
+            "relative_l2_median": 0.0018022633488675775,
+            "share_identical_codes": 0.028105677346824058
+          },
+          "structural": {
+            "relative_l2_max": 0.008266281336545944,
+            "relative_l2_median": 0.0019621143583208323,
+            "row_bf16_steps_max": 33.59375,
+            "row_bf16_steps_p999": 4.25,
+            "share_above_one_row_step": 0.020966154156309185
+          }
+        }
+      },
+      "ada_sm89_58": {
+        "esmc_small": {
+          "final_hidden": {
+            "relative_l2_max": 0.002091032452881336,
+            "relative_l2_median": 0.0017917272634804249,
+            "row_bf16_steps_max": 32.0,
+            "row_bf16_steps_p999": 2.0,
+            "share_above_one_row_step": 0.003063040068655303
+          },
+          "final_mean_var": {
+            "relative_l2_max": 0.010394862852990627,
+            "relative_l2_median": 0.0002945841115433723,
+            "row_bf16_steps_max": 31.318115234375,
+            "row_bf16_steps_p999": 1.1441335678100586,
+            "share_above_one_row_step": 0.0012629988757729062
+          },
+          "layer_hidden": {
+            "relative_l2_max": 0.002582404762506485,
+            "relative_l2_median": 0.002243828261271119,
+            "row_bf16_steps_max": 32.0,
+            "row_bf16_steps_p999": 2.0,
+            "share_above_one_row_step": 0.008590081725457702
+          },
+          "sae_codes": {
+            "jaccard_mean": 0.9958831929640534,
+            "jaccard_min": 0.939393937587738,
+            "relative_l2_max": 0.007698777399461938,
+            "relative_l2_median": 0.0008898000979250417,
+            "share_identical_codes": 0.8669211647727273
+          },
+          "sae_max": {
+            "jaccard_mean": 0.9910681798740535,
+            "jaccard_min": 0.8908930928288605,
+            "relative_l2_max": 0.08288066770969603,
+            "relative_l2_median": 0.0019816205170775122,
+            "share_identical_codes": 0.00955593029792018
+          },
+          "structural": {
+            "relative_l2_max": 0.0028251756448298693,
+            "relative_l2_median": 0.0018875406822189689,
+            "row_bf16_steps_max": 14.25,
+            "row_bf16_steps_p999": 1.75,
+            "share_above_one_row_step": 0.011408025568181818
+          }
+        },
+        "esmc_large": {
+          "final_hidden": {
+            "relative_l2_max": 0.004257372114807367,
+            "relative_l2_median": 0.0019334802636876702,
+            "row_bf16_steps_max": 64.0,
+            "row_bf16_steps_p999": 3.5,
+            "share_above_one_row_step": 0.006753760957557344
+          },
+          "final_mean_var": {
+            "relative_l2_max": 0.01696462370455265,
+            "relative_l2_median": 0.0003293815243523568,
+            "row_bf16_steps_max": 65.61767578125,
+            "row_bf16_steps_p999": 1.3871593475341797,
+            "share_above_one_row_step": 0.0018985970582724378
+          },
+          "layer_hidden": {
+            "relative_l2_max": 0.009937752038240433,
+            "relative_l2_median": 0.0019539452623575926,
+            "row_bf16_steps_max": 96.0,
+            "row_bf16_steps_p999": 4.0,
+            "share_above_one_row_step": 0.006549745296388363
+          },
+          "sae_codes": {
+            "jaccard_mean": 0.9956180838882133,
+            "jaccard_min": 0.8550724387168884,
+            "relative_l2_max": 0.033671955669301624,
+            "relative_l2_median": 0.0007450657662193785,
+            "share_identical_codes": 0.8634588068181818
+          },
+          "sae_max": {
+            "jaccard_mean": 0.9918231900263171,
+            "jaccard_min": 0.8585005279831045,
+            "relative_l2_max": 0.09177529470640926,
+            "relative_l2_median": 0.0018022633488675775,
+            "share_identical_codes": 0.028105677346824058
+          },
+          "structural": {
+            "relative_l2_max": 0.008266277611255646,
+            "relative_l2_median": 0.0019621020182967186,
+            "row_bf16_steps_max": 33.59375,
+            "row_bf16_steps_p999": 4.25,
+            "share_above_one_row_step": 0.02096638535008286
+          }
+        }
+      },
+      "ada_sm89_142": {
+        "esmc_small": {
+          "final_hidden": {
+            "relative_l2_max": 0.002091032452881336,
+            "relative_l2_median": 0.0017917272634804249,
+            "row_bf16_steps_max": 32.0,
+            "row_bf16_steps_p999": 2.0,
+            "share_above_one_row_step": 0.003063040068655303
+          },
+          "final_mean_var": {
+            "relative_l2_max": 0.010394862852990627,
+            "relative_l2_median": 0.0002945841115433723,
+            "row_bf16_steps_max": 31.318115234375,
+            "row_bf16_steps_p999": 1.1441335678100586,
+            "share_above_one_row_step": 0.0012629988757729062
+          },
+          "layer_hidden": {
+            "relative_l2_max": 0.002582404762506485,
+            "relative_l2_median": 0.002243828261271119,
+            "row_bf16_steps_max": 32.0,
+            "row_bf16_steps_p999": 2.0,
+            "share_above_one_row_step": 0.008590081725457702
+          },
+          "sae_codes": {
+            "jaccard_mean": 0.9958831929640534,
+            "jaccard_min": 0.939393937587738,
+            "relative_l2_max": 0.007698777399461938,
+            "relative_l2_median": 0.0008898000979250417,
+            "share_identical_codes": 0.8669211647727273
+          },
+          "sae_max": {
+            "jaccard_mean": 0.9910681798740535,
+            "jaccard_min": 0.8908930928288605,
+            "relative_l2_max": 0.08288066770969603,
+            "relative_l2_median": 0.0019816205170775122,
+            "share_identical_codes": 0.00955593029792018
+          },
+          "structural": {
+            "relative_l2_max": 0.0028251756448298693,
+            "relative_l2_median": 0.0018875481327995658,
+            "row_bf16_steps_max": 14.25,
+            "row_bf16_steps_p999": 1.75,
+            "share_above_one_row_step": 0.011408141165068655
+          }
+        },
+        "esmc_large": {
+          "final_hidden": {
+            "relative_l2_max": 0.004257372114807367,
+            "relative_l2_median": 0.0019334802636876702,
+            "row_bf16_steps_max": 64.0,
+            "row_bf16_steps_p999": 3.5,
+            "share_above_one_row_step": 0.006753760957557344
+          },
+          "final_mean_var": {
+            "relative_l2_max": 0.01696462370455265,
+            "relative_l2_median": 0.0003293815243523568,
+            "row_bf16_steps_max": 65.61767578125,
+            "row_bf16_steps_p999": 1.3871593475341797,
+            "share_above_one_row_step": 0.0018985970582724378
+          },
+          "layer_hidden": {
+            "relative_l2_max": 0.009937752038240433,
+            "relative_l2_median": 0.0019539452623575926,
+            "row_bf16_steps_max": 96.0,
+            "row_bf16_steps_p999": 4.0,
+            "share_above_one_row_step": 0.006549745296388363
+          },
+          "sae_codes": {
+            "jaccard_mean": 0.9956180838882133,
+            "jaccard_min": 0.8550724387168884,
+            "relative_l2_max": 0.033671955669301624,
+            "relative_l2_median": 0.0007450657662193785,
+            "share_identical_codes": 0.8634588068181818
+          },
+          "sae_max": {
+            "jaccard_mean": 0.9918231900263171,
+            "jaccard_min": 0.8585005279831045,
+            "relative_l2_max": 0.09177529470640926,
+            "relative_l2_median": 0.0018022633488675775,
+            "share_identical_codes": 0.028105677346824058
+          },
+          "structural": {
+            "relative_l2_max": 0.008266277611255646,
+            "relative_l2_median": 0.0019621020182967186,
+            "row_bf16_steps_max": 33.59375,
+            "row_bf16_steps_p999": 4.25,
+            "share_above_one_row_step": 0.02096638535008286
+          }
+        }
+      }
+    }
+  }
+}

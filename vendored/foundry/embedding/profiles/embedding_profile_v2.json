@@ -1,0 +1,144 @@
+{
+  "schema": "embedding_profile_schema_v1",
+  "id": "embedding_profile_v2",
+  "status": "qualified",
+  "function": {
+    "precision_mode": {
+      "esmc_small": "fp16_backbone",
+      "esmc_large": "fp16_backbone",
+      "esmc_6b": "bf16_backbone",
+      "esmc_small_random": "fp16_backbone"
+    },
+    "attention_backend": "efficient_attention",
+    "numerics": {
+      "preferred_blas_library": "cublaslt",
+      "bf16_reduced_precision_reduction": false,
+      "bf16_reduced_precision_reduction_split_k": false,
+      "fp16_reduced_precision_reduction": false,
+      "fp16_reduced_precision_reduction_split_k": false,
+      "fp16_accumulation": false,
+      "fp32_precision": "ieee",
+      "matmul_fp32_precision": "ieee",
+      "cudnn_fp32_precision": "ieee",
+      "cudnn_conv_fp32_precision": "ieee",
+      "cudnn_rnn_fp32_precision": "ieee",
+      "deterministic_algorithms": true,
+      "deterministic_warn_only": false,
+      "fill_uninitialized_memory": true,
+      "cudnn_deterministic": true,
+      "cudnn_benchmark": false,
+      "cublas_workspace_bytes": 33554432,
+      "cublaslt_workspace_bytes": 1048576,
+      "fp16_bf16_reduction_math_sdp": false,
+      "autocast": false
+    },
+    "environment_variables": {
+      "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
+      "EMBEDDING_PROFILE": "embedding_profile_v2",
+      "NVIDIA_TF32_OVERRIDE": "0",
+      "PYTHONHASHSEED": "0",
+      "TORCH_BLAS_PREFER_CUBLASLT": "1"
+    },
+    "environments": {
+      "linux/aarch64": "8aa7b9c4fcff30077e1fe2f12f3c61f80da3c1948ce511c114f70f9acfa814e2",
+      "linux/x86_64": "011c06bc17f1e5aaeeeb28012a0235d24b3abd1de96215e6c8f8a1d01905fded"
+    },
+    "geometry": {
+      "esmc_small": {
+        "bucket_tokens": 64,
+        "token_budget": 32768,
+        "max_rows": 256,
+        "sae_chunk_rows": 1024
+      },
+      "esmc_large": {
+        "bucket_tokens": 64,
+        "token_budget": 32768,
+        "max_rows": 256,
+        "sae_chunk_rows": 1024
+      },
+      "esmc_6b": {
+        "bucket_tokens": 64,
+        "token_budget": 32768,
+        "max_rows": 256,
+        "sae_chunk_rows": 1024
+      },
+      "esmc_small_random": {
+        "bucket_tokens": 64,
+        "token_budget": 32768,
+        "max_rows": 256,
+        "sae_chunk_rows": 1024
+      }
+    },
+    "readout": {
+      "name": "sae_topk_canonical_v1"
+    },
+    "extra_streams": [
+      "layer_mean_var",
+      "structural_mean_var"
+    ]
+  },
+  "classes": {
+    "hopper_sm90_132": {
+      "device_type": "cuda",
+      "compute_capability": [
+        9,
+        0
+      ],
+      "multiprocessors": 132,
+      "tier": 1,
+      "reference": true,
+      "bases": [
+        "esmc_small",
+        "esmc_large",
+        "esmc_6b",
+        "esmc_small_random"
+      ],
+      "members": [
+        "NVIDIA GH200 480GB",
+        "NVIDIA H100 80GB HBM3"
+      ]
+    }
+  },
+  "canary": {
+    "golden": {
+      "hopper_sm90_132": {
+        "esmc_small": {
+          "final_hidden": "e6e08d13d0e77a4d7ee3df6c1affb01610c86707c677179df738e59bd3e2ec95",
+          "final_mean_var": "8e8c147390816d70db0e1308c4ca2829df3eb7b9f245d978295aa28e048ede22",
+          "layer_hidden": "84d0ab1531772d4e0d827923a8fb06a68b2947214e967c8e56eadef2a359d804",
+          "layer_mean_var": "fb51708a12ad83d83a38db6c260a55924ab7afed5c5907a8cee16eb65982b086",
+          "sae_codes": "b39bb4edb1804c4466c7f9d00b81da55f74ce6375e8b6a1b3d848bb154fefa15",
+          "sae_max": "5aeb61f2af328ff441e59cfb6bacdc69dfd3f60053857999f6d7db30dabc9d1c",
+          "structural": "3c11710deabcc1a1b7e92b1b195db24ac9e67c85250a7bbd7cc8422c707bbe46",
+          "structural_mean_var": "433b020a9379f3f42c2735cbfd299dfb56016717307697236c2421632af00f69"
+        },
+        "esmc_large": {
+          "final_hidden": "451f8e194771b6c229cab67a1ac83bf97b420af864f5e7b4d7689725580228fe",
+          "final_mean_var": "b897ab0030205473ca96b69f7b953ef91b821a9b0df6cf96cf599f3c85e9ccc5",
+          "layer_hidden": "e668b6cf7df233ef8322bf9634d7e7382d19a14555d316260b4d003a68e88937",
+          "layer_mean_var": "83b8e17058f02421ed898d896efbb865a570607cffa4a6eb60f25e04077ea166",
+          "sae_codes": "d05b5dc7c5b5f3ed2bb9ac63d8824554853c32e179a93dd74280b86a64035954",
+          "sae_max": "b8c88c3d6dc686f3d7214c8d4d0d22cce92bd71de8b2ef830f8b89b57cf69007",
+          "structural": "cdd14a66f0ca0883e1679c4d5bb67a9af9b72a25117edc377232890e4a255603",
+          "structural_mean_var": "f0ff7331c4662daff4fc26592ae456509689db6de9a2248fce773a03076fec17"
+        },
+        "esmc_6b": {
+          "final_hidden": "f8f9f28a871d488c42f2460f1cc0368f212d2ba047cb8e24a14f547b11e44a8e",
+          "final_mean_var": "3f5bfe4ae90282c51d441e8f42d15295e5cb8f3aaebc82c7116257b291caf11c",
+          "layer_hidden": "b7c46aa2ed3e37b8775e825efb15e1c85a75c7757476f3a0fc1ff6bfa3463f7a",
+          "layer_mean_var": "053d0de3a2430e20b488c8d420980a8a9416107cd8afeecdbd34ade9287d6fb5",
+          "sae_codes": "3a7d08f7c4831924a25297bccede4dcf492a61a9fdcf27c1ea925b8cca4d930c",
+          "sae_max": "d4e9f08ebeb9670086d9ae4341e5dd759e3a211d2493bea1af7bc4188601d9d2",
+          "structural": "71ff35da18d719ddf024ef33b6ef93c7cce768b5c132d8650b4a4a32e7d5eb6d",
+          "structural_mean_var": "adc5935df62486ef0fa3f0c3668b457a9728401b2d2924dbd0b6e27a6f81d7e9"
+        },
+        "esmc_small_random": {
+          "final_hidden": "a47b54574ef386c434f661127aeb88f016294e5c1cc9d6208e6053b6d1183aa6",
+          "final_mean_var": "58d39bd325e293db02a2f5e73688f1c38119eeb62587c3bc26eeecab7d499fd5",
+          "layer_hidden": "8509ab3be350b19325bb406468e0ab07e0d7061a3a2d5114009d1b3961801656"
+        }
+      }
+    },
+    "bounds": {}
+  }
+}

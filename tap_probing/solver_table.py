@@ -12,6 +12,8 @@ from pathlib import Path
 from src.protify.interpretability.figures import TASK_LABELS
 from src.protify.interpretability.trends import CONCEPT_ORDER
 
+from tap_probing.figure_style import site_tex
+
 
 SELECTIONS = {"best_any": "any site", "best_residual": "residual stream"}
 
@@ -19,18 +21,19 @@ SELECTIONS = {"best_any": "any site", "best_residual": "residual stream"}
 def state(probe: str) -> str:
     """`site:layer` as the text names it: the site's macro name and its block."""
     site, layer = probe.split(":")
-    return r"\site{" + site.replace("_", r"\_") + "} " + layer
+    return f"{site_tex(site)} {layer}"
 
 
 def solver_table(table: pd.DataFrame, path: Path) -> Path:
     """A LaTeX table of the AdamW and converged-solver test scores of every refitted probe."""
     order = {task: index for index, task in enumerate(CONCEPT_ORDER)}
     table = table.sort_values(["task", "selection"], key=lambda column: column.map(order) if column.name == "task" else column)
-    lines = [r"\begin{table}[p]", r"\centering\small",
+    lines = [r"\begin{table}[!htbp]", r"\centering\small",
              r"\caption{\textbf{Converged solvers against the global AdamW setting.} For each protein task of ESMC-300 (one seed, "
              r"unit-norm states), the full-width probe chosen on validation among all sites and among residual-stream states, refitted "
              r"with a validation-tuned L2 penalty by L-BFGS (ridge regression for ProtParam). Scores are test MCC, and cosine similarity "
-             r"for ProtParam.}",
+             r"for ProtParam. Converged fitting lifts the stream's probes more than those of the best site, so part of the intra-block "
+             r"states' edge under AdamW is fitting.}",
              r"\label{tab:solver}", r"\begin{tabular}{@{}l l l r r r@{}}", r"\toprule",
              r"Task & Chosen among & State & AdamW & Solver & Difference \\", r"\midrule"]
     for _, row in table.iterrows():

@@ -2,8 +2,8 @@
 
     py -m projects.tooling.tap_probing.scripts.publish_collection [--apply]
 
-Logan, 2026-10-16: a public Gleghorn Lab collection for the paper with every model and dataset it uses; every repository
-moves to GleghornLab except the FastPLMs models and the Bernett datasets. Without `--apply` it prints the plan. A moved
+The paper's public Gleghorn Lab collection holds every model and dataset it uses; every repository moves to GleghornLab
+except the FastPLMs models and the Bernett datasets. Without `--apply` it prints the plan. A moved
 repository keeps its history and commit hashes, and the Hub redirects the old name.
 """
 
@@ -27,9 +27,9 @@ NOTES = {
     "Synthyra/ESMplusplus_large": "ESMC-600, FastPLMs implementation",
     "Synthyra/ESMplusplus_6B": "ESMC-6B, FastPLMs implementation",
     "GleghornLab/protein_concept_probing": "22 concept tasks with homology splits",
-    "Synthyra/bernett_gold_ppi_2": "Bernett et al. 2026 least-biased PPI gold standard (main text)",
-    "Synthyra/bernett_gold_ppi": "Bernett et al. 2024 PPI gold standard (Supplement)",
-    "GleghornLab/esmc_tap_probing_results": "every score, selection, interval and analysis behind the figures",
+    "Synthyra/bernett_gold_ppi_2": "Bernett et al. 2026 least-biased PPI gold standard (Supplement)",
+    "Synthyra/bernett_gold_ppi": "Bernett et al. 2024 PPI gold standard (main text)",
+    "GleghornLab/esmc_tap_probing_results": "First archive: every score, selection, interval and analysis table of the survey",
 }
 
 apply = "--apply" in sys.argv

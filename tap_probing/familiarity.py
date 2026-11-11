@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from scipy.stats import rankdata
 
+from tap_probing.figure_style import CONTROLS as CONTROL_STYLES, MODEL_COLORS, interval_marks, kind_tag, row_bands
 from tap_probing.pooling_study import KIND_OF, KINDS
 
 
@@ -45,7 +46,6 @@ DRAWS = 1000
 DRAW_SEED = 0
 QUINTILES = 5
 THRESHOLD = 0.1  # a kind reads as familiarity-driven above this median partial rho (fixed before launch)
-KIND_TAGS = {"sorting and topology": "sorting, topology", "InterPro membership": "InterPro"}  # short names inside figures
 TASKS = tuple(task for _, tasks in KINDS for task in tasks)
 
 
@@ -235,9 +235,9 @@ def _task_rows(tasks: Sequence[str]) -> list[str]:
     return [task for task in TASKS if task in set(tasks)]
 
 
-def _kind_bands(axis: Axes, rows: list[str]) -> None:
-    """Thin separators between kinds of concept on a task axis, with the kind named at the right."""
-    from src.protify.interpretability.figures import GRID, INK_SECONDARY
+def _kind_rules(axis: Axes, rows: list[str], named: bool = False) -> None:
+    """Rules between kinds of concept on a task axis; with `named`, each kind named at the right."""
+    from src.protify.interpretability.figures import MUTED
 
     start = 0
     for kind, tasks in KINDS:
@@ -246,129 +246,136 @@ def _kind_bands(axis: Axes, rows: list[str]) -> None:
             continue
         stop = start + len(members)
         if start > 0:
-            axis.axhline(start - 0.5, color=GRID, lw=0.6, zorder=0)
-        axis.text(1.01, 1 - (start + stop) / 2 / len(rows), KIND_TAGS.get(kind, kind), transform=axis.transAxes, fontsize=5.5,
-                  color=INK_SECONDARY, va="center", ha="left")
+            axis.axhline(start - 0.5, color=MUTED, lw=0.5, zorder=1)
+        if named:
+            kind_tag(axis, 1 - (start + stop) / 2 / len(rows), kind, axis.transAxes)
         start = stop
+
+
+def _task_axis(axis: Axes, rows: list[str]) -> None:
+    """A panel with one row per task: bands behind the rows and vertical gridlines."""
+    from src.protify.interpretability.figures import GRID, SHORT_LABELS
+
+    row_bands(axis, len(rows))
+    axis.set_yticks(range(len(rows)))
+    axis.set_yticklabels([SHORT_LABELS.get(task, task) for task in rows], fontsize=6)
+    axis.grid(axis="x", color=GRID, lw=0.5)
+    axis.set_axisbelow(True)
+    axis.tick_params(labelsize=6)
 
 
 def familiarity_figure(correlation: pd.DataFrame, quintiles: pd.DataFrame, path: Path) -> Path:
     """A: per task, rho between ESMC-300's PPLL and each encoder's per-protein score. B: per task, the partial rho
-    between PPLL and ESMC-300's gain over each control, with 95% intervals. C to F: per kind, each encoder's mean score
-    by PPLL quintile, averaged over the kind's tasks."""
+    between PPLL and ESMC-300's gain over each control, in the control's color, with 95% intervals. C to F: per kind,
+    each encoder's mean score by PPLL quintile, averaged over the kind's tasks. One legend, at the top."""
     from matplotlib.lines import Line2D
-    from src.protify.interpretability.figures import GRID, INK_SECONDARY, MUTED, PALETTE, SHORT_LABELS, _letter, _pyplot, _save, _tag
+    from src.protify.interpretability.figures import GRID, INK_SECONDARY, _letter, _pyplot, _save, _tag
 
     plt = _pyplot()
     rows = _task_rows(correlation["task"])
     positions = {task: index for index, task in enumerate(rows)}
-    colors = {"trained": PALETTE[0], "random300": PALETTE[1], "onehot": MUTED}
+    colors = {"trained": MODEL_COLORS["ESMC-300"], "random300": CONTROL_STYLES["random init"].color, "onehot": CONTROL_STYLES["one-hot"].color}
+    marks = {"trained": "o", "random300": CONTROL_STYLES["random init"].marker, "onehot": CONTROL_STYLES["one-hot"].marker}
     names = {"trained": "ESMC-300", "random300": "random init", "onehot": "one-hot"}
     figure = plt.figure(figsize=(7.2, 4.8))
-    grid = figure.add_gridspec(2, 4, height_ratios=[2.3, 1.0], hspace=0.42, wspace=0.42)
-    left, right = figure.add_subplot(grid[0, :2]), figure.add_subplot(grid[0, 2:])
-    offsets = {"trained": -0.22, "random300": 0.0, "onehot": 0.22}
+    top = figure.add_gridspec(1, 2, left=0.125, right=0.88, top=0.905, bottom=0.415, wspace=0.05)
+    left, right = figure.add_subplot(top[0, 0]), figure.add_subplot(top[0, 1])
+    offsets = {"trained": -0.25, "random300": 0.0, "onehot": 0.25}
     for encoder in ("trained", "random300", "onehot"):
         table = correlation[(correlation["quantity"] == "score") & (correlation["encoder"] == encoder) & ~correlation["partial"]]
         y = np.array([positions[task] for task in table["task"]]) + offsets[encoder]
-        left.errorbar(table["rho"], y, xerr=[table["rho"] - table["low"], table["high"] - table["rho"]], fmt="o", ms=3, color=colors[encoder],
-                      ecolor=colors[encoder], elinewidth=0.6, capsize=0)
-    for control, offset in (("random300", -0.13), ("onehot", 0.13)):
+        interval_marks(left, table["rho"], y, table["low"], table["high"], colors[encoder], marker=marks[encoder])
+    for control, offset in (("random300", -0.15), ("onehot", 0.15)):
         table = correlation[(correlation["quantity"] == "gain") & (correlation["encoder"] == control) & correlation["partial"]]
         y = np.array([positions[task] for task in table["task"]]) + offset
-        right.errorbar(table["rho"], y, xerr=[table["rho"] - table["low"], table["high"] - table["rho"]], fmt="o", ms=3, color=colors[control],
-                       ecolor=colors[control], elinewidth=0.6, capsize=0)
-    for axis, label in ((left, "ρ, PPLL with score"), (right, "partial ρ, PPLL with gain")):
-        axis.axvline(0, color=INK_SECONDARY, lw=0.6, zorder=0)
-        axis.set_yticks(range(len(rows)))
-        axis.set_yticklabels([SHORT_LABELS.get(task, task) for task in rows], fontsize=6)
-        axis.set_ylim(len(rows) - 0.5, -0.5)
+        interval_marks(right, table["rho"], y, table["low"], table["high"], colors[control], marker=marks[control])
+    for axis, label in ((left, r"$\rho$, PPLL with score"), (right, r"partial $\rho$, PPLL with gain over control")):
+        _task_axis(axis, rows)
+        axis.axvline(0, color=INK_SECONDARY, lw=0.6, zorder=1)
         axis.set_xlabel(label, fontsize=6.5)
-        axis.grid(axis="x", color=GRID, lw=0.5)
-        axis.tick_params(labelsize=6)
     right.set_yticklabels([])
-    gains = [Line2D([], [], color=colors[control], marker="o", ms=3, lw=0.6) for control in ("random300", "onehot")]
-    right.legend(gains, ["gain over random init", "gain over one-hot"], loc="upper left", frameon=False, fontsize=5.5, handlelength=1.4)
-    _kind_bands(right, rows)
-    _letter(left, "A", x=-0.32)
-    _letter(right, "B")
+    _kind_rules(left, rows)
+    _kind_rules(right, rows, named=True)
+    _letter(left, "A", x=-0.27)
+    _letter(right, "B", x=-0.02)
     kinds = [kind for kind, tasks in KINDS if set(tasks) & set(quintiles["task"])]
-    axes = [figure.add_subplot(grid[1, index]) for index in range(len(kinds))]
+    bottom = figure.add_gridspec(1, len(kinds), left=0.055, right=0.995, top=0.285, bottom=0.07, wspace=0.2)
+    axes = [figure.add_subplot(bottom[0, index]) for index in range(len(kinds))]
     for index, (axis, kind) in enumerate(zip(axes, kinds, strict=True)):
         table = quintiles[quintiles["kind"] == kind].groupby("quintile")[["score_trained", "score_random300", "score_onehot"]].mean()
         for column, encoder in (("score_trained", "trained"), ("score_random300", "random300"), ("score_onehot", "onehot")):
-            axis.plot(table.index, table[column], marker="o", ms=2.5, lw=1.0, color=colors[encoder])
+            axis.plot(table.index, table[column], marker=marks[encoder], ms=2.5, lw=1.0, color=colors[encoder])
         axis.set_xticks(range(1, QUINTILES + 1))
         axis.set_xlabel("PPLL quintile", fontsize=6.5)
         if index == 0:
             axis.set_ylabel("mean score", fontsize=6.5)
         axis.grid(color=GRID, lw=0.5)
         axis.tick_params(labelsize=6)
-        _tag(axis, KIND_TAGS.get(kind, kind))
-        _letter(axis, "CDEF"[index], x=-0.18)
-    key = [Line2D([], [], color=colors[encoder], marker="o", ms=3, lw=1.0) for encoder in ("trained", "random300", "onehot")]
-    figure.legend(key, [names[encoder] for encoder in ("trained", "random300", "onehot")], loc="lower center", bbox_to_anchor=(0.5, 0.92),
+        _tag(axis, kind)
+        _letter(axis, "CDEF"[index], x=-0.02)
+    key = [Line2D([], [], color=colors[encoder], marker=marks[encoder], ms=3, lw=1.0) for encoder in ("trained", "random300", "onehot")]
+    figure.legend(key, [names[encoder] for encoder in ("trained", "random300", "onehot")], loc="upper center", bbox_to_anchor=(0.5, 1.0),
                   ncol=3, fontsize=6.5, frameon=False)
     return _save(figure, path)
 
 
 def models_figure(models: pd.DataFrame, proteins: pd.DataFrame, pplls: dict[str, pd.Series], path: Path) -> Path:
-    """A: per task, rho between each trained model's own PPLL and its own per-protein score. B: the distribution of
-    ESMC-300's PPLL over each task's test proteins. C: ESMC-300's PPLL against length over every test protein. D: the
-    larger models' PPLL against ESMC-300's over every test sequence (`pplls`, by model name)."""
-    from src.protify.interpretability.figures import GRID, INK_SECONDARY, PALETTE, SHORT_LABELS, _letter, _pyplot, _save
+    """A: per task, rho between each trained model's own PPLL and its own per-protein score, with 95% intervals. B: the
+    distribution of ESMC-300's PPLL over each task's test proteins. C: ESMC-300's PPLL against length over every test
+    protein. D: the larger models' PPLL against ESMC-300's over every test sequence (`pplls`, by model name). One legend,
+    at the top."""
+    from matplotlib.lines import Line2D
+    from src.protify.interpretability.figures import GRID, INK_SECONDARY, _letter, _pyplot, _save
 
     plt = _pyplot()
     rows = _task_rows(models["task"])
     positions = {task: index for index, task in enumerate(rows)}
-    figure, axes = plt.subplots(1, 4, figsize=(7.2, 2.4), gridspec_kw={"width_ratios": [1.15, 0.9, 1.0, 1.0], "wspace": 0.55})
+    figure, axes = plt.subplots(1, 4, figsize=(7.2, 2.75), gridspec_kw={"width_ratios": [1.3, 0.85, 1.0, 1.0], "wspace": 0.42, "left": 0.125, "right": 0.995,
+                                                                        "top": 0.824, "bottom": 0.14})  # 0.1 in under the legend, clear of the letters
     for index, (_, model) in enumerate(TRAINED):
         table = models[(models["model"] == model) & ~models["partial"]]
         if table.empty:
             continue
-        y = np.array([positions[task] for task in table["task"]]) + (index - 1) * 0.22
-        axes[0].errorbar(table["rho"], y, xerr=[table["rho"] - table["low"], table["high"] - table["rho"]], fmt="o", ms=3, color=PALETTE[index],
-                         ecolor=PALETTE[index], elinewidth=0.6, capsize=0, label=model)
-    axes[0].axvline(0, color=INK_SECONDARY, lw=0.6, zorder=0)
-    axes[0].set_xlabel("ρ, own PPLL with own score", fontsize=6.5)
+        y = np.array([positions[task] for task in table["task"]]) + (index - 1) * 0.25
+        interval_marks(axes[0], table["rho"], y, table["low"], table["high"], MODEL_COLORS[model])
     distributions = [proteins[proteins["task"] == task]["ppll"].to_numpy() for task in rows]
     parts = axes[1].violinplot(distributions, positions=range(len(rows)), vert=False, widths=0.8, showmedians=True, showextrema=False)
     for body in parts["bodies"]:
-        body.set_facecolor(PALETTE[0])
+        body.set_facecolor(MODEL_COLORS["ESMC-300"])
         body.set_alpha(0.35)
-    parts["cmedians"].set_color(PALETTE[0])
-    axes[1].set_xlabel("ESMC-300 PPLL", fontsize=6.5)
+    parts["cmedians"].set_color(MODEL_COLORS["ESMC-300"])
     for axis in axes[:2]:
-        axis.set_yticks(range(len(rows)))
-        axis.set_yticklabels([SHORT_LABELS.get(task, task) for task in rows], fontsize=6)
-        axis.set_ylim(len(rows) - 0.5, -0.5)
-        axis.grid(axis="x", color=GRID, lw=0.5)
-        axis.tick_params(labelsize=6)
+        _task_axis(axis, rows)
+    axes[0].axvline(0, color=INK_SECONDARY, lw=0.6, zorder=1)
+    axes[0].set_xlabel(r"$\rho$, own PPLL with own score", fontsize=6.5)
+    axes[0].set_xticks([-0.4, -0.2, 0.0, 0.2])
+    axes[1].set_xlabel("ESMC-300 PPLL", fontsize=6.5)
     axes[1].set_yticklabels([])
     unique = proteins.drop_duplicates("sequence")
-    axes[2].scatter(unique["length"], unique["ppll"], s=1.5, alpha=0.25, color=PALETTE[0], lw=0, rasterized=True)
+    axes[2].scatter(unique["length"], unique["ppll"], s=1.5, alpha=0.25, color=MODEL_COLORS["ESMC-300"], lw=0, rasterized=True)
     axes[2].set_xscale("log")
     axes[2].set_xlabel("length (residues)", fontsize=6.5)
     axes[2].set_ylabel("ESMC-300 PPLL", fontsize=6.5)
     axes[2].grid(color=GRID, lw=0.5)
+    axes[2].set_axisbelow(True)
     axes[2].tick_params(labelsize=6)
-    axes[0].set_xticks([-0.4, -0.2, 0.0, 0.2])
-    handles, labels = axes[0].get_legend_handles_labels()
-    figure.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.97), ncol=3, fontsize=6.5, frameon=False)
+    key = [Line2D([], [], color=MODEL_COLORS[model], marker="o", ms=3, ls="none") for _, model in TRAINED]
+    figure.legend(key, [model for _, model in TRAINED], loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=3, fontsize=6.5, frameon=False)
     reference = pplls.get("ESMC-300")
-    for index, (_, model) in enumerate(TRAINED[1:], start=1):
+    for _, model in TRAINED[1:]:
         if reference is None or model not in pplls:
             continue
         shared = reference.index.intersection(pplls[model].index)
-        axes[3].scatter(reference[shared], pplls[model][shared], s=1.5, alpha=0.2, color=PALETTE[index], lw=0, rasterized=True)
+        axes[3].scatter(reference[shared], pplls[model][shared], s=0.7, alpha=0.1, color=MODEL_COLORS[model], lw=0, rasterized=True)  # thousands of points: a light wash
     axes[3].plot([-4, 0], [-4, 0], color=INK_SECONDARY, lw=0.6, zorder=0)
     axes[3].text(-3.3, -3.95, "y = x", fontsize=5.5, color=INK_SECONDARY)
     axes[3].set_xlabel("ESMC-300 PPLL", fontsize=6.5)
     axes[3].set_ylabel("larger model's PPLL", fontsize=6.5)
     axes[3].grid(color=GRID, lw=0.5)
+    axes[3].set_axisbelow(True)
     axes[3].tick_params(labelsize=6)
-    for axis, letter in zip(axes, "ABCD", strict=True):
-        _letter(axis, letter, x=-0.3 if letter == "A" else -0.08)
+    for axis, letter, x in zip(axes, "ABCD", (-0.42, -0.04, -0.25, -0.25), strict=True):
+        _letter(axis, letter, x=x)
     return _save(figure, path)
 
 

@@ -18,6 +18,7 @@ SIZES = {"go_cc": 11409, "interpro_repeat": 819, "prot_param": 12747, "interpro_
 
 def interval_table(task: str, labels: list[str], noise: np.ndarray) -> pd.DataFrame:
     """The whole split's value is the label's lift exactly; each draw adds the task's noise, shared by every label."""
+    # noise: (B,) one draw per resample
     rows = []
     for label in labels:
         for choice in ("stream", "any"):
@@ -58,7 +59,7 @@ def test_gains_and_their_difference_from_shared_draws(tmp_path: Path) -> None:
             assert row["low"] == pytest.approx(expected, abs=1e-12) and row["high"] == pytest.approx(expected, abs=1e-12)
     assert set(mean["tasks"]) == {len(SIZES)}
     per_task = rows_of(gains, "esmc300_norm", "stream", "interaction")
-    assert dict(zip(per_task["task"], per_task["train_size"]))["interpro_repeat"] == 819
+    assert dict(zip(per_task["task"], per_task["train_size"], strict=True))["interpro_repeat"] == 819
     balanced = rows_of(mean, "esmc300_norm", "any", "score_mlp", metric="balanced_mcc").iloc[0]
     assert balanced["estimate"] == pytest.approx(0.55) and np.isnan(balanced["low"])  # the whole split alone
 
@@ -72,8 +73,8 @@ def test_table_lists_each_model_and_treatment(tmp_path: Path) -> None:
     assert cells[5] == "0.550"  # a score without its interval
     assert cells[9] == r"\begin{tabular}[t]{@{}c@{}}$+$0.040 \\ {\scriptsize ($+$0.040, $+$0.040)}\end{tabular}"
     assert size_correlations(gains).empty  # every task's difference is the same here, so no correlation is defined
-    ranking = [line for line in ranking_table(gains, "any").splitlines() if line.startswith("ESMC")]
-    assert [line.split(" & ")[:2] for line in ranking] == [["ESMC-300", "linear"], ["ESMC-300", "MLP"], ["ESMC-6B", "linear"], ["ESMC-6B", "MLP"]]
+    ranking = [line for line in ranking_table(gains, "any").splitlines() if " linear " in line or " MLP " in line]
+    assert [line.split(" & ")[:2] for line in ranking] == [["ESMC-300", "linear"], ["", "MLP"], ["ESMC-6B", "linear"], ["", "MLP"]]  # one name per model
     # ROC AUC and balanced MCC under the mean alone and under mean and variance; this table has no average precision
     assert ranking[1].split(" & ")[2:4] == ["0.500", "0.550"] and ranking[0].split(" & ")[4:6] == ["--", "--"]
 
