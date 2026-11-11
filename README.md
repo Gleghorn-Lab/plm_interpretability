@@ -13,7 +13,7 @@ autoencoders.
 Everything the paper uses is in the Gleghorn Lab collection
 [Exhaustive hidden-state probing](https://huggingface.co/collections/GleghornLab/exhaustive-hidden-state-probing-6ad254122b677c479591339c):
 the three models (FastPLMs implementations), the 22 concept datasets with their homology splits, the two Bernett
-gold standards, and three result archives.
+gold standards, the annotation compendium that labels the neuron study's atlas, and three result archives.
 
 | Archive | What it holds |
 |---|---|
@@ -104,9 +104,8 @@ python scripts/units_atlas.py tables --root units --preregistration units/prereg
 S10, and `units/tables/decisions.tex` is Table S3. To run the study itself, each stage of `scripts/units_atlas.py`
 takes the same `--root` and `--preregistration`; the passes ran on one NVIDIA GH200 (96 GB) and write about a terabyte of
 activation maxima, and `scripts/units_queue.sh` holds the order they ran in. The neuron code needs no Protify: it
-imports the packages under `vendored/`. Its inputs are the models and datasets the preregistration pins; one of them,
-the annotation compendium `Synthyra/annotation_compendium_v1`, is not public, so the stages that read its labels
-need access to it.
+imports the packages under `vendored/`. Its inputs are the models and datasets the preregistration pins, among them
+the annotation compendium `Synthyra/annotation_compendium_v1`, whose labels the passes read.
 
 ## Tests
 
