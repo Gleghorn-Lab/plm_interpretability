@@ -53,13 +53,15 @@ pass reruns, from the pinned models and datasets.
 No GPU is needed: the archives hold every probe's scores, and the figures are drawn from them.
 
 ```bash
-git clone --recurse-submodules https://github.com/Gleghorn-Lab/plm_interpretability
+git clone https://github.com/Gleghorn-Lab/plm_interpretability
 cd plm_interpretability
+git submodule update --init protify
 pip install -r protify/requirements.txt -r requirements.txt
 PYTHONPATH=protify python -m tap_probing.reproduce --out reproduced
 ```
 
-Only Protify goes on the import path here: it carries its own copies of the lab packages, and `vendored/` stays off
+Fetch the Protify submodule alone, as above: a recursive clone also descends into Protify's own submodules, which
+nothing here uses and one of which is not public. Only Protify goes on the import path here: it carries its own copies of the lab packages, and `vendored/` stays off
 the path so that the drawing code runs on the versions it was pinned with. The script downloads both archives' tables at their pinned revisions (several thousand small
 files; at the Hub's rate limit it pauses and resumes, and a Hugging Face token in `HF_TOKEN` raises that limit),
 checks that each model's rebuilt probe summary matches the one written when the paper's figures were drawn, and
